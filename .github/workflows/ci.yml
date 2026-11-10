@@ -41,3 +41,11 @@ jobs:
           assert "key" in manifest
           assert manifest["background"]["type"] == "module"
           PY
+
+      - name: Build the store package, zip it, and reject version 1.1.1 or a manifest key
+        env:
+          FLOR_SUPABASE_PUBLISHABLE_KEY: ci-dummy-publishable-key
+        run: |
+          npm run build:store
+          node scripts/package.mjs
+          node --experimental-strip-types scripts/webstore-cli.ts --check dist-zip/*.zip
