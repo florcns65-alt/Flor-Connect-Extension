@@ -1,0 +1,104 @@
+import type { FlorApi } from "../api/flor-api";
+import { FlorError, mapUnknownError } from "../shared/errors";
+import { localDayBounds } from "../shared/format";
+import { logger } from "../shared/logger";
+import {
+  AppointmentsSchema,
+  AuthStateSchema,
+  BootstrapSchema,
+  ClientMessageSchema,
+  PeopleSchema,
+  PersonDetailSchema,
+  fail,
+  ok,
+  type AuthStateMessage,
+  type Envelope,
+} from "../shared/messages";
+import type { PublicUser, Workspace } from "../shared/types";
+
+export interface WorkerContext {
+  getAuth(): AuthStateMessage;
+  signIn(): Promise<AuthStateMessage>;
+  signOut(): Promise<AuthStateMessage>;
+  invalidateSession(): Promise<void>;
+  getWorkspaceId(): Promise<string | null>;
+  setWorkspaceId(id: string): Promise<void>;
+  openFlor(): Promise<void>;
+  api: FlorApi;
+  requireUser(): PublicUser;
+}
+
+async function chooseWorkspace(ctx: WorkerContext, workspaces: Workspace[]): Promise<string | null> {
+  const saved = await ctx.getWorkspaceId();
+  if (saved && workspaces.some((workspace) => workspace.id === saved)) return saved;
+  if (workspaces.length === 1) {
+    await ctx.setWorkspaceId(workspaces[0].id);
+    return workspaces[0].id;
+  }
+  return null;
+}
+
+export async function handleMessage(ctx: WorkerContext, raw: unknown): Promise<Envelope> {
+  const parsed = ClientMessageSchema.safeParse(raw);
+  if (!parsed.success) return fail("validation", "That request wasn't understood.");
+
+  try {
+    switch (parsed.data.type) {
+      case "auth:getState":
+        return ok(ctx.getAuth());
+      case "auth:signIn":
+        return ok(await ctx.signIn());
+      case "auth:signOut":
+        return ok(await ctx.signOut());
+      case "flor:open":
+        await ctx.openFlor();
+        return ok({ opened: true });
+      case "workspace:set":
+        ctx.requireUser();
+        await ctx.setWorkspaceId(parsed.data.workspaceId);
+        return ok({ workspaceId: parsed.data.workspaceId });
+      case "data:bootstrap": {
+        const user = ctx.requireUser();
+        const legal = await ctx.api.getLegalStatus(user.id);
+        if (!legal.complete) {
+          return ok(BootstrapSchema.parse({ legal, workspaces: [], workspaceId: null }));
+        }
+        const workspaces = await ctx.api.listWorkspaces(user.id);
+        const workspaceId = await chooseWorkspace(ctx, workspaces);
+        return ok(BootstrapSchema.parse({ legal, workspaces, workspaceId }));
+      }
+      case "data:appointments": {
+        ctx.requireUser();
+        const rows = await ctx.api.listTodayAppointments(parsed.data.workspaceId, localDayBounds());
+        return ok(AppointmentsSchema.parse(rows));
+      }
+      case "data:search": {
+        ctx.requireUser();
+        const rows = await ctx.api.searchPeople(parsed.data.workspaceId, parsed.data.query);
+        return ok(PeopleSchema.parse(rows));
+      }
+      case "data:patient": {
+        ctx.requireUser();
+        const person = await ctx.api.getPerson(parsed.data.personId);
+        return ok(PersonDetailSchema.parse(person));
+      }
+      default:
+        return fail("validation", "That request wasn't understood.");
+    }
+  } catch (error) {
+    const mapped = error instanceof FlorError ? error : mapUnknownError(error);
+    if (mapped.code === "signed_out") {
+      await ctx.invalidateSession();
+    }
+    logger.warn("Request failed", { code: mapped.code });
+    return fail(mapped.code, mapped.message);
+  }
+}
+
+export function readAuthState(input: AuthStateMessage): AuthStateMessage {
+  const parsed = AuthStateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { phase: "signed_out", user: null, error: "Please sign in again." };
+  }
+  return parsed.data;
+}
