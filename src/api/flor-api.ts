@@ -1,10 +1,11 @@
-import type { DayBounds, LegalStatus, PersonDetail, PersonSummary, TodayAppointment, Workspace } from "../shared/types";
+import type { DayBounds, LegalStatus, PeoplePage, PersonChart, TodayAppointment, Workspace } from "../shared/types";
 
-/** Read-only FLOR access. Milestone 2 can replace this with `/api/connect/v2` without changing the panel. */
+/** Read-only FLOR access. A later milestone can replace this with `/api/connect/v2` without changing the panel. */
 export interface FlorApi {
   getLegalStatus(userId: string): Promise<LegalStatus>;
   listWorkspaces(userId: string): Promise<Workspace[]>;
   listTodayAppointments(workspaceId: string, bounds: DayBounds): Promise<TodayAppointment[]>;
-  searchPeople(workspaceId: string, query: string): Promise<PersonSummary[]>;
-  getPerson(personId: string): Promise<PersonDetail>;
+  listPeople(workspaceId: string, offset: number): Promise<PeoplePage>;
+  searchPeople(workspaceId: string, query: string, offset?: number): Promise<PeoplePage>;
+  getPersonChart(workspaceId: string, personId: string, nowIso: string): Promise<PersonChart>;
 }

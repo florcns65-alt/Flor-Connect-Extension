@@ -7,8 +7,8 @@ import {
   AuthStateSchema,
   BootstrapSchema,
   ClientMessageSchema,
-  PeopleSchema,
-  PersonDetailSchema,
+  PeoplePageSchema,
+  PersonChartSchema,
   fail,
   ok,
   type AuthStateMessage,
@@ -72,15 +72,20 @@ export async function handleMessage(ctx: WorkerContext, raw: unknown): Promise<E
         const rows = await ctx.api.listTodayAppointments(parsed.data.workspaceId, localDayBounds());
         return ok(AppointmentsSchema.parse(rows));
       }
+      case "data:people": {
+        ctx.requireUser();
+        const page = await ctx.api.listPeople(parsed.data.workspaceId, parsed.data.offset ?? 0);
+        return ok(PeoplePageSchema.parse(page));
+      }
       case "data:search": {
         ctx.requireUser();
-        const rows = await ctx.api.searchPeople(parsed.data.workspaceId, parsed.data.query);
-        return ok(PeopleSchema.parse(rows));
+        const page = await ctx.api.searchPeople(parsed.data.workspaceId, parsed.data.query, parsed.data.offset ?? 0);
+        return ok(PeoplePageSchema.parse(page));
       }
       case "data:patient": {
         ctx.requireUser();
-        const person = await ctx.api.getPerson(parsed.data.personId);
-        return ok(PersonDetailSchema.parse(person));
+        const chart = await ctx.api.getPersonChart(parsed.data.workspaceId, parsed.data.personId, new Date().toISOString());
+        return ok(PersonChartSchema.parse(chart));
       }
       default:
         return fail("validation", "That request wasn't understood.");

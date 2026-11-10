@@ -10,7 +10,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { SetupScreen } from "./screens/SetupScreen";
 import { WelcomeScreen } from "./screens/WelcomeScreen";
 import { WorkspaceScreen } from "./screens/WorkspaceScreen";
-import { openFlor, openPatient, retryPatient, selectWorkspace, signIn, signOut, useFlorSession } from "./session";
+import { loadMorePatients, openFlor, openPatient, retryPatient, selectWorkspace, signIn, signOut, useFlorSession } from "./session";
 import { useFlorStore } from "./store";
 
 export function App() {
@@ -27,9 +27,16 @@ export function App() {
   const query = useFlorStore((state) => state.query);
   const searchResults = useFlorStore((state) => state.searchResults);
   const searchLoading = useFlorStore((state) => state.searchLoading);
+  const patientListMode = useFlorStore((state) => state.patientListMode);
+  const directory = useFlorStore((state) => state.directory);
+  const directoryTotal = useFlorStore((state) => state.directoryTotal);
+  const workspacePatientTotal = useFlorStore((state) => state.workspacePatientTotal);
+  const directoryLoading = useFlorStore((state) => state.directoryLoading);
+  const directoryLoadingMore = useFlorStore((state) => state.directoryLoadingMore);
+  const directoryError = useFlorStore((state) => state.directoryError);
   const patient = useFlorStore((state) => state.patient);
+  const patientChart = useFlorStore((state) => state.patientChart);
   const patientLoading = useFlorStore((state) => state.patientLoading);
-  const recents = useFlorStore((state) => state.recents);
   const route = useFlorStore((state) => state.route);
   const previousRoute = useFlorStore((state) => state.previousRoute);
   const loadError = useFlorStore((state) => state.loadError);
@@ -92,11 +99,14 @@ export function App() {
     return (
       <PatientScreen
         patient={patient}
+        upcoming={patientChart?.upcoming ?? []}
+        recent={patientChart?.recent ?? []}
         loading={patientLoading}
         error={errorMessage}
         offline={offline}
         onBack={() => useFlorStore.getState().setRoute(previousRoute)}
         onRetry={() => retryPatient()}
+        onNavigate={(next) => useFlorStore.getState().setRoute(next)}
       />
     );
   }
@@ -105,14 +115,20 @@ export function App() {
     return (
       <PatientsScreen
         {...shared}
+        mode={patientListMode}
+        onMode={(next) => useFlorStore.getState().setPatientListMode(next)}
         query={query}
         onQuery={(value) => useFlorStore.getState().setQuery(value)}
+        people={directory}
+        total={directoryTotal}
+        workspaceTotal={workspacePatientTotal}
+        loading={directoryLoading}
+        loadingMore={directoryLoadingMore}
+        hasMore={directory !== null && directoryTotal !== null && directory.length < directoryTotal}
+        onLoadMore={() => void loadMorePatients()}
         appointments={appointments}
         appointmentsLoading={appointmentsLoading}
-        searchResults={searchResults}
-        searchLoading={searchLoading}
-        recents={recents}
-        error={errorMessage}
+        error={directoryError?.message ?? null}
         offline={offline}
         onRetry={() => useFlorStore.getState().retry()}
         onOpenPatient={(id) => void openPatient(id)}

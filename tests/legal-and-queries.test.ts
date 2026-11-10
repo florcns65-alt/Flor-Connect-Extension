@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { legalStatus, missingLegalAcceptances, currentLegalVersions } from "../src/api/legal";
 import {
+  birthdaySearchClauses,
   escapePostgrestOrValue,
   normalizeSearchQuery,
+  peoplePageQuery,
   peopleSearchExpression,
   peopleSearchQuery,
   todayAppointmentsQuery,
-  SEARCH_LIMIT,
+  PEOPLE_PAGE_SIZE,
 } from "../src/api/filters";
 import { localDayBounds } from "../src/shared/format";
 import legalVersions from "../config/legal-versions.json";
@@ -63,15 +65,24 @@ describe("query builders", () => {
   it("escapes search characters reserved by PostgREST or()", () => {
     expect(escapePostgrestOrValue("Ann, (Jr) 100%\\")).toBe("Ann\\, \\(Jr\\) 100\\%\\\\");
     const expression = peopleSearchExpression("Ann, Jr");
-    expect(expression).toBe("first_name.ilike.%Ann\\, Jr%,last_name.ilike.%Ann\\, Jr%,mrn.ilike.%Ann\\, Jr%");
-    expect(peopleSearchQuery("ws", "Ann, Jr")).toMatchObject({
+    expect(expression).toContain("first_name.ilike.%Ann\\, Jr%");
+    expect(expression).toContain("last_name.ilike.%Ann\\, Jr%");
+    expect(expression).toContain("mrn.ilike.%Ann\\, Jr%");
+    expect(expression).toContain("and(first_name.ilike.%Ann%,last_name.ilike.%Jr%)");
+    expect(peopleSearchQuery("ws", "Ann, Jr", 50)).toMatchObject({
       table: "people",
-      limit: SEARCH_LIMIT,
+      range: { from: 50, to: 99 },
+      count: "exact",
       filters: [
         { op: "eq", column: "workspace_id", value: "ws" },
         { op: "or", expression },
       ],
     });
+    expect(peoplePageQuery("ws", 0).range).toEqual({ from: 0, to: PEOPLE_PAGE_SIZE - 1 });
+    expect(peoplePageQuery("ws", 0).orders?.[0]).toEqual({ column: "last_name", ascending: true, nullsFirst: false });
+    expect(birthdaySearchClauses("12 Mar 1984")).toEqual(["date_of_birth.eq.1984-03-12"]);
+    expect(birthdaySearchClauses("1984")).toEqual(["date_of_birth.ilike.1984-%"]);
+    expect(birthdaySearchClauses("Jane")).toEqual([]);
   });
 
   it("ignores queries shorter than 2 characters", () => {

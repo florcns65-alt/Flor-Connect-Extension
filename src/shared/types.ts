@@ -35,6 +35,32 @@ export interface PersonDetail extends PersonSummary {
   insuranceMemberId: string | null;
 }
 
+export interface AppointmentSnippet {
+  id: string;
+  startTime: string;
+  endTime: string | null;
+  status: string | null;
+  appointmentType: string | null;
+}
+
+/** A directory row. `appointment` is the next visit, or the latest one when nothing is upcoming. */
+export interface DirectoryPerson extends PersonSummary {
+  appointment: AppointmentSnippet | null;
+}
+
+export interface PeoplePage {
+  people: DirectoryPerson[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface PersonChart {
+  person: PersonDetail;
+  upcoming: AppointmentSnippet[];
+  recent: AppointmentSnippet[];
+}
+
 export interface TodayAppointment {
   id: string;
   startTime: string;

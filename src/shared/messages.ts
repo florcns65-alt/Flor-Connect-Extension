@@ -81,6 +81,33 @@ export const AppointmentsSchema = z.array(
 
 export const PeopleSchema = z.array(PersonSummarySchema);
 
+const AppointmentSnippetSchema = z
+  .object({
+    id: z.string().uuid(),
+    startTime: z.string(),
+    endTime: z.string().nullable(),
+    status: z.string().nullable(),
+    appointmentType: z.string().nullable(),
+  })
+  .strict();
+
+export const PeoplePageSchema = z
+  .object({
+    people: z.array(PersonSummarySchema.extend({ appointment: AppointmentSnippetSchema.nullable() }).strict()),
+    total: z.number().int().nonnegative(),
+    offset: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+  })
+  .strict();
+
+export const PersonChartSchema = z
+  .object({
+    person: PersonDetailSchema,
+    upcoming: z.array(AppointmentSnippetSchema),
+    recent: z.array(AppointmentSnippetSchema),
+  })
+  .strict();
+
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("auth:getState") }).strict(),
   z.object({ type: z.literal("auth:signIn") }).strict(),
@@ -89,11 +116,21 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("data:bootstrap") }).strict(),
   z.object({ type: z.literal("data:appointments"), workspaceId: z.string().uuid() }).strict(),
   z.object({
+    type: z.literal("data:people"),
+    workspaceId: z.string().uuid(),
+    offset: z.number().int().nonnegative().optional(),
+  }).strict(),
+  z.object({
     type: z.literal("data:search"),
     workspaceId: z.string().uuid(),
     query: z.string().max(80),
+    offset: z.number().int().nonnegative().optional(),
   }).strict(),
-  z.object({ type: z.literal("data:patient"), personId: z.string().uuid() }).strict(),
+  z.object({
+    type: z.literal("data:patient"),
+    workspaceId: z.string().uuid(),
+    personId: z.string().uuid(),
+  }).strict(),
   z.object({ type: z.literal("workspace:set"), workspaceId: z.string().uuid() }).strict(),
 ]);
 
