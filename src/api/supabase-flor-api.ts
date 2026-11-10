@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { attachListAppointments, toAppointmentSnippet } from "./directory";
+import { PERSON_DETAIL_COLUMNS } from "./filters";
 import {
   appointmentsForPeopleQuery,
   legalQuery,
@@ -13,7 +14,9 @@ import {
   todayAppointmentsQuery,
   workspacesQuery,
 } from "./filters";
-import type { FlorApi } from "./flor-api";
+import type { FlorApi, PersonMutation } from "./flor-api";
+import { FlorError } from "../shared/errors";
+import { valuesMatchUpdate } from "../engine/map";
 import { legalStatus } from "./legal";
 import { executeQuery, type QueryClient, type QueryOutcome } from "./query";
 import {
@@ -66,7 +69,40 @@ export function asQueryClient(client: SupabaseClient): QueryClient {
   return client as unknown as QueryClient;
 }
 
-export function createSupabaseFlorApi(client: QueryClient): FlorApi {
+const WRITABLE_COLUMNS = new Set([
+  "first_name",
+  "last_name",
+  "date_of_birth",
+  "sex",
+  "mrn",
+  "phone",
+  "email",
+  "address_line1",
+  "city",
+  "state",
+  "postal_code",
+]);
+
+export function createSupabasePersonMutation(client: SupabaseClient): PersonMutation {
+  return {
+    async update(workspaceId, personId, fields) {
+      const payload: Record<string, string> = {};
+      for (const [key, value] of Object.entries(fields)) {
+        if (WRITABLE_COLUMNS.has(key)) payload[key] = value;
+      }
+      const { data, error } = await client
+        .from("people")
+        .update(payload)
+        .eq("id", personId)
+        .eq("workspace_id", workspaceId)
+        .select(PERSON_DETAIL_COLUMNS)
+        .maybeSingle();
+      return { data, error: error ? { message: error.message, code: error.code } : null };
+    },
+  };
+}
+
+export function createSupabaseFlorApi(client: QueryClient, mutation?: PersonMutation): FlorApi {
   return {
     async getLegalStatus(userId) {
       const outcome = await executeQuery(client, legalQuery(userId));
@@ -112,6 +148,25 @@ export function createSupabaseFlorApi(client: QueryClient): FlorApi {
         return snippet ? [snippet] : [];
       });
       return { person, upcoming, recent };
+    },
+    async updatePersonDemographics(workspaceId, personId, fields, nowIso) {
+      if (!mutation) throw new FlorError("server", "Saving to FLOR is not available in this build.");
+      const payload: Record<string, string> = {};
+      for (const [key, value] of Object.entries(fields)) {
+        if (WRITABLE_COLUMNS.has(key) && value.trim()) payload[key] = value.trim();
+      }
+      if (Object.keys(payload).length === 0) throw new FlorError("validation", "Choose at least one field to save.");
+      const { data, error } = await mutation.update(workspaceId, personId, payload);
+      if (error || !data) {
+        throw new FlorError("server", "FLOR did not save those fields. This account may not be allowed to edit that patient.");
+      }
+      const person = toPersonDetail(parseWithSchema(PersonRowSchema, data));
+      if (!valuesMatchUpdate(payload, person)) {
+        throw new FlorError("server", "FLOR did not confirm the saved fields.");
+      }
+      logger.info("Updated patient demographics", { count: Object.keys(payload).length });
+      const chart = await createSupabaseFlorApi(client, mutation).getPersonChart(workspaceId, personId, nowIso);
+      return { chart, saved: Object.keys(payload) };
     },
   };
 }

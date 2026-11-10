@@ -87,6 +87,16 @@ export async function handleMessage(ctx: WorkerContext, raw: unknown): Promise<E
         const chart = await ctx.api.getPersonChart(parsed.data.workspaceId, parsed.data.personId, new Date().toISOString());
         return ok(PersonChartSchema.parse(chart));
       }
+      case "data:updatePerson": {
+        ctx.requireUser();
+        const result = await ctx.api.updatePersonDemographics(
+          parsed.data.workspaceId,
+          parsed.data.personId,
+          parsed.data.fields,
+          new Date().toISOString(),
+        );
+        return ok(PersonChartSchema.parse(result.chart));
+      }
       default:
         return fail("validation", "That request wasn't understood.");
     }

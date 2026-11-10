@@ -307,11 +307,23 @@ button:disabled { cursor: not-allowed; }
   letter-spacing: -0.02em;
 }
 
-.page-title {
+.page-title, .screen-title, .patient-name {
   margin: 2px 0 0;
-  font-size: 30px;
-  line-height: 1.1;
-  letter-spacing: -0.035em;
+  font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.02em;
+}
+.section-heading, .detail-card h2, .section-label {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.body-copy, .lede {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 22px;
 }
 
 .lede { margin: 0; font-size: 14.5px; }
@@ -454,12 +466,7 @@ button:disabled { cursor: not-allowed; }
 .detail-row strong { font-weight: 650; text-align: right; }
 .missing { color: var(--faint); font-weight: 500; }
 
-.patient-name {
-  margin: 0;
-  font-size: 28px;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-}
+.patient-name { margin: 0; }
 
 .back-button { display: inline-flex; align-items: center; gap: 4px; padding: 0; }
 
@@ -634,3 +641,14 @@ button:disabled { cursor: not-allowed; }
 .sk-line { display: block; height: 12px; margin: 6px 0; }
 .sk-line.short { width: 46%; }
 .icon-button { border: 0; background: transparent; color: var(--faint); font-size: 18px; line-height: 1; padding: 0 4px; }
+.map-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 4px; }
+.map-row strong { font-weight: 600; }
+.example-pill { background: var(--sage); color: var(--primary); border-radius: 999px; font-size: 12px; font-weight: 600; padding: 2px 8px; }
+.page-chip { margin-top: 10px; }
+.identity-flag { background: #e7f2ec; border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+.identity-flag.bad { background: #fdeceb; color: var(--danger); }
+.conflict { padding: 8px 4px 12px; border-top: 1px solid #f1eee8; }
+.conflict-line { display: flex; justify-content: space-between; gap: 12px; margin: 4px 0; }
+.result-copy { justify-content: center; text-align: center; }
+.done-icon { background: var(--primary); color: white; font-size: 22px; }
+.undo { display: block; margin: 8px auto 0; }

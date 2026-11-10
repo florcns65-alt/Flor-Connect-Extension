@@ -1,4 +1,4 @@
-import { createSupabaseFlorApi, asQueryClient } from "../api/supabase-flor-api";
+import { createSupabaseFlorApi, createSupabasePersonMutation, asQueryClient } from "../api/supabase-flor-api";
 import { createFlorClient } from "../auth/client";
 import { reduceAuth, SIGNED_OUT, type AuthMachineState } from "../auth/machine";
 import { completeGoogleSignIn, SignInError } from "../auth/sign-in";
@@ -23,7 +23,7 @@ const supabase = createFlorClient(
   { supabaseUrl: config.supabaseUrl, supabasePublishableKey: config.supabasePublishableKey },
   createStorageAdapter(local),
 );
-const api = createSupabaseFlorApi(asQueryClient(supabase));
+const api = createSupabaseFlorApi(asQueryClient(supabase), createSupabasePersonMutation(supabase));
 
 let auth: AuthMachineState = SIGNED_OUT;
 let authError: string | null = null;
