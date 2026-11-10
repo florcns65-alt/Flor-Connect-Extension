@@ -21,6 +21,40 @@ export function personInitials(value: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+export function ageInYears(value: string | null | undefined, now = new Date()): number | null {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  let age = now.getFullYear() - year;
+  const beforeBirthday = now.getMonth() + 1 < month || (now.getMonth() + 1 === month && now.getDate() < day);
+  if (beforeBirthday) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
+
+export function formatShortDate(iso: string, now = new Date()): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  if (day.getTime() === start.getTime()) return "Today";
+  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+}
+
+export function formatVisitWhen(iso: string, now = new Date(), withWeekday = false): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const label = formatShortDate(iso, now);
+  const time = formatTime(iso);
+  if (label === "Today") return time ? `Today · ${time}` : "Today";
+  const weekday = withWeekday ? date.toLocaleDateString("en-GB", { weekday: "short" }) : "";
+  const dated = weekday ? `${weekday} ${label}` : label;
+  return time ? `${dated} · ${time}` : dated;
+}
+
 export function formatDob(value: string | null | undefined): string {
   if (!value) return "";
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -90,4 +124,13 @@ export function localDayBounds(now = new Date()): { startUtc: string; endUtc: st
 export function isFinishedStatus(status: string | null): boolean {
   if (!status) return false;
   return /^(completed|complete|done|fulfilled|checked_out)$/i.test(status);
+}
+
+export function appointmentStatusLabel(status: string | null): string {
+  if (!status) return "";
+  if (isFinishedStatus(status)) return "Done";
+  if (/schedul|book/i.test(status)) return "Scheduled";
+  if (/cancel/i.test(status)) return "Cancelled";
+  const trimmed = status.trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
 }

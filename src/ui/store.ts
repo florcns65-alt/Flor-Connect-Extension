@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import type { FlorError } from "../shared/errors";
 import type { AuthStateMessage } from "../shared/messages";
-import type { PersonDetail, PersonSummary, TodayAppointment, Workspace } from "../shared/types";
+import type { DirectoryPerson, PeoplePage, PersonChart, PersonDetail, PersonSummary, TodayAppointment, Workspace } from "../shared/types";
+import { toSelectedPatient, type SelectedPatient } from "./selected-patient";
 
 export type PanelRoute = "home" | "patients" | "activity" | "settings" | "patient";
 export type LegalGate = "unknown" | "ok" | "required";
@@ -18,7 +19,17 @@ interface FlorState {
   query: string;
   searchResults: PersonSummary[] | null;
   searchLoading: boolean;
+  patientListMode: "today" | "all";
+  directory: DirectoryPerson[] | null;
+  directoryTotal: number | null;
+  workspacePatientTotal: number | null;
+  directoryOffset: number;
+  directoryLoading: boolean;
+  directoryLoadingMore: boolean;
+  directoryError: FlorError | null;
   patient: PersonDetail | null;
+  patientChart: PersonChart | null;
+  selectedPatient: SelectedPatient | null;
   patientLoading: boolean;
   recents: PersonSummary[];
   route: PanelRoute;
@@ -33,9 +44,15 @@ interface FlorState {
   setAppointments: (appointments: TodayAppointment[]) => void;
   setAppointmentsLoading: (appointmentsLoading: boolean) => void;
   setQuery: (query: string) => void;
+  setPatientListMode: (patientListMode: "today" | "all") => void;
   setSearchResults: (searchResults: PersonSummary[] | null) => void;
   setSearchLoading: (searchLoading: boolean) => void;
-  setPatient: (patient: PersonDetail) => void;
+  setDirectoryLoading: (directoryLoading: boolean) => void;
+  setDirectory: (page: PeoplePage, filtered: boolean) => void;
+  appendDirectory: (page: PeoplePage) => void;
+  setDirectoryLoadingMore: (directoryLoadingMore: boolean) => void;
+  setDirectoryError: (directoryError: FlorError | null) => void;
+  setPatient: (chart: PersonChart) => void;
   setPatientLoading: (patientLoading: boolean) => void;
   setRoute: (route: PanelRoute) => void;
   selectWorkspace: (workspaceId: string) => void;
@@ -68,7 +85,17 @@ const emptyClinical = {
   query: "",
   searchResults: null as PersonSummary[] | null,
   searchLoading: false,
+  patientListMode: "all" as const,
+  directory: null as DirectoryPerson[] | null,
+  directoryTotal: null as number | null,
+  workspacePatientTotal: null as number | null,
+  directoryOffset: 0,
+  directoryLoading: false,
+  directoryLoadingMore: false,
+  directoryError: null as FlorError | null,
   patient: null as PersonDetail | null,
+  patientChart: null as PersonChart | null,
+  selectedPatient: null as SelectedPatient | null,
   patientLoading: false,
   recents: [] as PersonSummary[],
   route: "home" as PanelRoute,
@@ -108,9 +135,42 @@ export const useFlorStore = create<FlorState>((set, get) => ({
   setAppointments: (appointments) => set({ appointments, appointmentsLoading: false, loadError: null }),
   setAppointmentsLoading: (appointmentsLoading) => set({ appointmentsLoading, loadError: appointmentsLoading ? null : get().loadError }),
   setQuery: (query) => set({ query }),
+  setPatientListMode: (patientListMode) => set({ patientListMode }),
   setSearchResults: (searchResults) => set({ searchResults, searchLoading: false }),
   setSearchLoading: (searchLoading) => set({ searchLoading }),
-  setPatient: (patient) => set({ patient, patientLoading: false, loadError: null, recents: remember(get().recents, patient) }),
+  setDirectoryLoading: (directoryLoading) => set({ directoryLoading, directoryError: directoryLoading ? null : get().directoryError }),
+  setDirectory: (page, filtered) =>
+    set({
+      directory: page.people,
+      directoryTotal: page.total,
+      directoryOffset: page.people.length,
+      directoryLoading: false,
+      directoryLoadingMore: false,
+      directoryError: null,
+      workspacePatientTotal: filtered ? get().workspacePatientTotal : page.total,
+      searchResults: filtered ? page.people : null,
+      searchLoading: false,
+    }),
+  appendDirectory: (page) =>
+    set({
+      directory: [...(get().directory ?? []), ...page.people],
+      directoryTotal: page.total,
+      directoryOffset: (get().directory?.length ?? 0) + page.people.length,
+      directoryLoadingMore: false,
+      directoryError: null,
+    }),
+  setDirectoryLoadingMore: (directoryLoadingMore) => set({ directoryLoadingMore }),
+  setDirectoryError: (directoryError) =>
+    set({ directoryError, directoryLoading: false, directoryLoadingMore: false, searchLoading: false }),
+  setPatient: (chart) =>
+    set({
+      patient: chart.person,
+      patientChart: chart,
+      selectedPatient: toSelectedPatient(chart.person),
+      patientLoading: false,
+      loadError: null,
+      recents: remember(get().recents, chart.person),
+    }),
   setPatientLoading: (patientLoading) => set({ patientLoading }),
   setRoute: (route) => {
     const current = get().route;
@@ -119,7 +179,16 @@ export const useFlorStore = create<FlorState>((set, get) => ({
     set({ route, previousRoute, loadError: null });
   },
   selectWorkspace: (workspaceId) => set({ workspaceId, ...emptyClinical, reloadKey: get().reloadKey + 1 }),
-  setLoadError: (loadError) => set({ loadError, appointmentsLoading: false, searchLoading: false, patientLoading: false, bootLoading: false }),
+  setLoadError: (loadError) =>
+    set({
+      loadError,
+      appointmentsLoading: false,
+      searchLoading: false,
+      patientLoading: false,
+      bootLoading: false,
+      directoryLoading: false,
+      directoryLoadingMore: false,
+    }),
   setOffline: (offline) => set({ offline }),
   retry: () => set({ loadError: null, reloadKey: get().reloadKey + 1 }),
   clearClinical: () => set({ ...emptyClinical, legal: "unknown", workspaces: [], workspaceId: null }),

@@ -6,8 +6,8 @@ import {
   AppointmentsSchema,
   AuthStateSchema,
   BootstrapSchema,
-  PeopleSchema,
-  PersonDetailSchema,
+  PeoplePageSchema,
+  PersonChartSchema,
 } from "../shared/messages";
 import { request } from "./bridge";
 import { useFlorStore } from "./store";
@@ -113,24 +113,34 @@ export function useFlorSession(): void {
   }, [legal, workspaceId, reloadKey]);
 
   useEffect(() => {
+    if (legal !== "ok" || !workspaceId) return;
     const search = normalizeSearchQuery(debouncedQuery);
-    if (legal !== "ok" || !workspaceId || !search) {
-      useFlorStore.getState().setSearchResults(null);
-      return;
-    }
     let cancelled = false;
-    useFlorStore.getState().setSearchLoading(true);
-    void request(PeopleSchema, { type: "data:search", workspaceId, query: search })
-      .then((rows) => {
-        if (!cancelled) useFlorStore.getState().setSearchResults(rows);
+    useFlorStore.getState().setDirectoryLoading(true);
+    if (search) useFlorStore.getState().setSearchLoading(true);
+    const message = search
+      ? ({ type: "data:search", workspaceId, query: search, offset: 0 } as const)
+      : ({ type: "data:people", workspaceId, offset: 0 } as const);
+    void request(PeoplePageSchema, message)
+      .then((page) => {
+        if (!cancelled) useFlorStore.getState().setDirectory(page, Boolean(search));
       })
       .catch((error: unknown) => {
-        if (!cancelled) noteFailure(error);
+        if (!cancelled) noteDirectoryFailure(error);
       });
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, legal, workspaceId]);
+  }, [debouncedQuery, legal, workspaceId, reloadKey]);
+}
+
+function noteDirectoryFailure(error: unknown): void {
+  const mapped = error instanceof FlorError ? error : new FlorError("server", "Something went wrong. Please try again.");
+  if (mapped.code === "signed_out") {
+    noteFailure(error);
+    return;
+  }
+  useFlorStore.getState().setDirectoryError(mapped);
 }
 
 let lastPersonId: string | null = null;
@@ -170,13 +180,36 @@ export function retryPatient(): void {
   if (lastPersonId) void openPatient(lastPersonId);
 }
 
+export async function loadMorePatients(): Promise<void> {
+  const state = useFlorStore.getState();
+  if (!state.workspaceId || state.directoryLoading || state.directoryLoadingMore) return;
+  if (state.directory && state.directoryTotal !== null && state.directory.length >= state.directoryTotal) return;
+  const search = normalizeSearchQuery(state.query);
+  const offset = state.directoryOffset;
+  state.setDirectoryLoadingMore(true);
+  try {
+    const page = await request(
+      PeoplePageSchema,
+      search
+        ? { type: "data:search", workspaceId: state.workspaceId, query: search, offset }
+        : { type: "data:people", workspaceId: state.workspaceId, offset },
+    );
+    useFlorStore.getState().appendDirectory(page);
+  } catch (error) {
+    useFlorStore.getState().setDirectoryLoadingMore(false);
+    noteDirectoryFailure(error);
+  }
+}
+
 export async function openPatient(personId: string): Promise<void> {
+  const workspaceId = useFlorStore.getState().workspaceId;
+  if (!workspaceId) return;
   lastPersonId = personId;
   useFlorStore.getState().setRoute("patient");
   useFlorStore.getState().setPatientLoading(true);
   try {
-    const person = await request(PersonDetailSchema, { type: "data:patient", personId });
-    useFlorStore.getState().setPatient(person);
+    const chart = await request(PersonChartSchema, { type: "data:patient", workspaceId, personId });
+    useFlorStore.getState().setPatient(chart);
   } catch (error) {
     useFlorStore.getState().setPatientLoading(false);
     noteFailure(error);

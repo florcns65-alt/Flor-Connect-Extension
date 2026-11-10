@@ -51,6 +51,10 @@ function client(handler: (table: string, trace: string[]) => unknown): { client:
             trace.push(`limit:${count}`);
             return chain;
           },
+          range(from: number, to: number) {
+            trace.push(`range:${from}-${to}`);
+            return chain;
+          },
           single() {
             return Promise.resolve({ data: handler(table, trace), error: null });
           },
@@ -70,7 +74,7 @@ describe("FlorApi", () => {
       throw new Error("should not query");
     });
     const api = createSupabaseFlorApi(fake.client);
-    await expect(api.searchPeople(WS, "j")).resolves.toEqual([]);
+    await expect(api.searchPeople(WS, "j")).resolves.toEqual({ people: [], total: 0, offset: 0, limit: 50 });
     expect(fake.traces).toHaveLength(0);
   });
 
@@ -116,8 +120,10 @@ describe("FlorApi", () => {
     const fake = client(() => []);
     const api = createSupabaseFlorApi(fake.client);
     await api.searchPeople(WS, "Ann, Jr");
-    expect(fake.traces[0]).toContain("or:first_name.ilike.%Ann\\, Jr%,last_name.ilike.%Ann\\, Jr%,mrn.ilike.%Ann\\, Jr%");
-    expect(fake.traces[0]).toContain("limit:25");
+    expect(fake.traces[0].join("\n")).toContain("first_name.ilike.%Ann\\, Jr%");
+    expect(fake.traces[0].join("\n")).toContain("mrn.ilike.%Ann\\, Jr%");
+    expect(fake.traces[0]).toContain("range:0-49");
+    expect(fake.traces[0]).toContain("order:last_name");
   });
 });
 

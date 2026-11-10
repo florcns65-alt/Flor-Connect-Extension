@@ -25,8 +25,9 @@ function context(api: Partial<FlorApi>, extra: Partial<WorkerContext> = {}): Wor
       getLegalStatus: async () => ({ complete: true, missing: [] }),
       listWorkspaces: async () => [{ id: workspaceId, name: "Worcester P&N", role: "clinician" }],
       listTodayAppointments: async () => [],
-      searchPeople: async () => [],
-      getPerson: async () => {
+      listPeople: async () => ({ people: [], total: 0, offset: 0, limit: 50 }),
+      searchPeople: async () => ({ people: [], total: 0, offset: 0, limit: 50 }),
+      getPersonChart: async () => {
         throw new Error("unused");
       },
       ...api,
