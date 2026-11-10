@@ -1,0 +1,5 @@
+/** Public manifest key. It pins the unpacked extension id. It is not a secret. */
+export const EXTENSION_PUBLIC_KEY =
+  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAluy9GfReDaAU/Yr20sSSlofyLhLh2j8oV95LtaHkmmXnRUthn5JxBUGVig3k8ovTT7wFGNLHYawCYP1qlWyGLJ75WFrCmM2R24ddUMxzrcD3zh7Pmq6ctj4AF4FkdJnYmZCjWrvn2H8P9oyoeuduebrTxPynmf6FDkJU+GtPNS8Za0Y7El8FCVcz1/ESA00KP8hsHNwDxK9vJQIzQKjsdp68E6n0/y/fDNRCIWkYAWzNkss/mzIPCiisJ2fKb3/dhywjTDn1vJIPAWndlpd7vK74wxBF8AORQ3q/Okw0voOTgv78PqWlT8qlCKBD53kSqw+MG6Er7Osp2FF84TEazQIDAQAB";
+
+export const EXTENSION_ID = "bmjkikhmfmaieahonelaljfkeapiflah";

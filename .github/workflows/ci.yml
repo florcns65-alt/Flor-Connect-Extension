@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: Build with a dummy publishable key
+        run: npm run build
+        env:
+          FLOR_SUPABASE_PUBLISHABLE_KEY: ci-dummy-publishable-key
+      - name: Confirm the key was injected and the manifest is Milestone 1
+        run: |
+          if grep -R "__SUPABASE_PUBLISHABLE_KEY__" dist; then
+            echo "placeholder key was shipped"
+            exit 1
+          fi
+          if grep -R "service_role" dist; then
+            echo "service role marker was shipped"
+            exit 1
+          fi
+          grep -R "ci-dummy-publishable-key" dist >/dev/null
+          python3 - << 'PY'
+          import json
+          manifest = json.load(open("dist/manifest.json"))
+          assert manifest["name"] == "FLOR Connect"
+          assert manifest["version"] == "2.0.0"
+          assert manifest["minimum_chrome_version"] == "116"
+          assert "key" in manifest
+          assert manifest["background"]["type"] == "module"
+          PY
