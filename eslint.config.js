@@ -29,9 +29,13 @@ export default tseslint.config(
     rules: { "no-console": "off" },
   },
   {
-    files: ["vite.config.ts", "scripts/**/*.mjs"],
+    files: ["vite.config.ts", "scripts/**/*.{mjs,ts}"],
     languageOptions: {
       globals: { ...globals.node },
     },
+  },
+  {
+    files: ["scripts/**/*.ts"],
+    rules: { "no-console": "off" },
   },
 );

@@ -40,9 +40,9 @@ Click the toolbar icon. The side panel opens.
 
 `npm run dev` rebuilds `dist` whenever a file changes. Reload the extension in Chrome after a change.
 
-`npm run build:store` is the same build without the manifest `key`, for a later Chrome Web Store package. A store build will not keep the id above.
+`npm run build:store` is the same build without the manifest `key`. That is the package for the Chrome Web Store item `lkjfhjkgfbonfnlchglghoialgiipbid`. It does not keep the unpacked id above.
 
-`npm run package` builds and writes `dist-zip/flor-connect-2.0.0.zip` plus a `.sha256` file.
+`npm run package` builds the unpacked extension and writes `dist-zip/flor-connect-2.0.0.zip` plus a `.sha256` file. `npm run package:store` does the same for the store build.
 
 ## Scripts
 
@@ -53,7 +53,8 @@ Click the toolbar icon. The side panel opens.
 | `npm run lint` | ESLint |
 | `npm run build` | Unpacked extension in `dist` |
 | `npm run build:store` | Store build, no manifest key |
-| `npm run package` | Zip + SHA256 |
+| `npm run package` | Unpacked zip + SHA256 |
+| `npm run package:store` | Store zip + SHA256 |
 
 ## How sign-in works
 
@@ -67,6 +68,10 @@ Patient names, dates of birth, and the rest of a chart stay in memory. They are 
 
 See [docs/M1_TEST.md](docs/M1_TEST.md). A live Google sign-in has to be done by someone with a FLOR account. The automated tests do not claim that a real sign-in succeeded.
 
+## Publishing
+
+The store upload is a workflow the owner runs by hand. See [docs/PUBLISHING.md](docs/PUBLISHING.md). Nothing is published from a pull request.
+
 ## Out of scope for this milestone
 
-Reading or filling an EHR form, "Add this site", writing anything back to FLOR, server changes, and a Chrome Web Store upload.
+Reading or filling an EHR form, "Add this site", and writing anything back to FLOR.

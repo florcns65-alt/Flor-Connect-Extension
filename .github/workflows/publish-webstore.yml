@@ -1,0 +1,98 @@
+name: Publish to Chrome Web Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: FLOR origin to bake in
+        required: true
+        type: choice
+        options:
+          - preview
+          - prod
+        default: prod
+      publish_target:
+        description: draft-only uploads and stops. The other choices also submit that draft.
+        required: true
+        type: choice
+        options:
+          - draft-only
+          - trustedTesters
+          - default
+        default: draft-only
+      tag:
+        description: Optional tag to build (v*). Leave empty to use the selected branch.
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: chrome-web-store
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: chrome-web-store
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Reject a tag that is not v*
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "Tag must look like v2.0.0." >&2; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+      - name: Build the store package
+        env:
+          FLOR_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'prod' }}
+          FLOR_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FLOR_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build:store
+
+      - name: Zip the store package
+        run: node scripts/package.mjs
+
+      - name: Reject a package that is not newer than 1.1.1 or still has the manifest key
+        run: node --experimental-strip-types scripts/webstore-cli.ts --check dist-zip/*.zip
+
+      - name: Record the package hash
+        run: cat dist-zip/*.sha256 >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flor-connect-store-${{ github.run_id }}
+          path: |
+            dist-zip/*.zip
+            dist-zip/*.sha256
+          if-no-files-found: error
+
+      - name: Upload to the Chrome Web Store
+        env:
+          PUBLISH_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_target || 'draft-only' }}
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+        run: node --experimental-strip-types scripts/webstore-cli.ts dist-zip/*.zip
