@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   applyLayout,
   confirmRegion,
+  factsFromTargetFrames,
   identityFor,
   layoutDrifted,
   mapPageFacts,
@@ -104,26 +105,27 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
 
   async function openMapped(direction: "fill" | "save", context: PageContext, facts: PageFact[]) {
     if (!person || !workspaceId) return;
-    const detected = mapPageFacts(facts, person);
+    const scoped = factsFromTargetFrames(facts);
+    const detected = mapPageFacts(scoped, person);
     if (detected.mixed) {
-      setModel({ ...context, kind: "multi", direction, people: detected.people, error: "", fields: detected.fields, facts });
+      setModel({ ...context, kind: "multi", direction, people: detected.people, error: "", fields: detected.fields, facts: scoped });
       return;
     }
-    const identity = identityFor(detected.fields, person, facts);
+    const identity = identityFor(detected.fields, person, scoped);
     const stored = memory.get(workspaceId, context.lock.url);
     let fields = detected.fields;
     let layoutNote = "";
     if (stored) {
-      if (layoutDrifted(stored, facts)) layoutNote = "The page layout changed, so the remembered match was not used.";
-      else fields = applyLayout(stored, facts, fields);
+      if (layoutDrifted(stored, scoped)) layoutNote = "The page layout changed, so the remembered match was not used.";
+      else fields = applyLayout(stored, scoped, fields);
     }
-    const page: PageContext = { ...context, facts, fields, layoutNote, frameNote: context.frameNote };
+    const page: PageContext = { ...context, facts: scoped, fields, layoutNote, frameNote: context.frameNote };
     if (direction === "fill") {
       if (detected.writable === 0) {
         setModel({ kind: "no-form", message: "No form on this page" });
         return;
       }
-      setModel({ ...page, kind: "preview", blocked: identity.blockSave, identity: identity.summary });
+      setModel({ ...page, kind: "preview", blocked: identity.blockFill, identity: identity.summary });
       return;
     }
     if (detected.writable === 0) {
@@ -249,9 +251,10 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       setModel({ kind: "cant-read", message: "The page changed or could not be checked again. Nothing was typed.", counts: "" });
       return;
     }
-    const freshMapped = mapPageFacts(fresh.facts, person);
-    const currentIdentity = identityFor(freshMapped.fields, person, fresh.facts);
-    if (freshMapped.mixed || currentIdentity.blockSave) {
+    const freshFacts = factsFromTargetFrames(fresh.facts);
+    const freshMapped = mapPageFacts(freshFacts, person);
+    const currentIdentity = identityFor(freshMapped.fields, person, freshFacts);
+    if (freshMapped.mixed || currentIdentity.blockFill) {
       const message = freshMapped.mixed ? "This page still includes more than one person. Nothing was typed." : currentIdentity.summary;
       setModel({ kind: "cant-read", message, counts: "Nothing was typed." });
       return;
@@ -392,7 +395,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
           : field,
       );
       const identity = identityFor(fields, person, model.facts);
-      if (model.returnKind === "preview") setModel({ ...model, kind: "preview", fields, blocked: identity.blockSave, identity: identity.summary });
+      if (model.returnKind === "preview") setModel({ ...model, kind: "preview", fields, blocked: identity.blockFill, identity: identity.summary });
       else if (model.returnKind === "chart") setModel({ ...model, kind: "chart", fields, identity: identity.summary, blocked: identity.blockSave });
       else setModel({ ...model, kind: "mapping", fields, identity: identity.summary, blocked: identity.blockSave, direction: model.direction, remember: false });
     },
@@ -429,9 +432,10 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
         setModel({ ...model, blocked: true, identity: "The page could not be verified again. Nothing was saved.", error: "Close the panel and reopen it before trying again." });
         return;
       }
-      const scoped = model.lock.regionId ? fresh.facts.filter((fact) => fact.regionId === model.lock.regionId) : fresh.facts;
+      const framed = factsFromTargetFrames(fresh.facts);
+      const scoped = model.lock.regionId ? framed.filter((fact) => fact.regionId === model.lock.regionId) : framed;
       if (model.lock.regionId) {
-        const check = confirmRegion(fresh.facts, model.lock.regionId, person);
+        const check = confirmRegion(framed, model.lock.regionId, person);
         if (!check.ok) {
           setModel({ ...model, error: check.reason });
           return;

@@ -33,17 +33,17 @@ const LABELS: Record<DemographicKey, string> = {
 };
 
 const SYNONYMS: Record<DemographicKey, string[]> = {
-  first_name: ["first name", "given name", "given", "forename", "fname", "form fname", "patient first name"],
-  last_name: ["last name", "family name", "surname", "lname", "form lname"],
-  date_of_birth: ["date of birth", "birth date", "birthdate", "dob", "born", "form dob", "bday"],
+  first_name: ["first name", "firstname", "given name", "givenname", "given", "forename", "fname", "form fname", "patient first name"],
+  last_name: ["last name", "lastname", "family name", "familyname", "surname", "lname", "form lname"],
+  date_of_birth: ["date of birth", "birth date", "birthdate", "dateofbirth", "dob", "born", "birthday", "form dob", "bday"],
   sex: ["sex", "gender", "administrative sex", "birth sex", "form sex"],
   mrn: ["mrn", "medical record number", "medical record", "external id", "pubpid", "form pubpid"],
-  phone: ["home phone", "phone", "telephone", "mobile phone", "phone number", "form phone home", "tel"],
+  phone: ["home phone number", "home phone", "phone", "telephone", "mobile", "mobile phone", "phone number", "form phone home", "tel"],
   email: ["email", "e-mail", "email address", "form email"],
   address_line1: ["address", "street", "address line 1", "address 1", "street address"],
-  city: ["city", "town"],
-  state: ["state", "province", "region"],
-  postal_code: ["postal code", "zip", "zip code", "postcode"],
+  city: ["city", "town", "address level2", "address level 2"],
+  state: ["state", "province", "region", "address level1", "address level 1"],
+  postal_code: ["postal code", "postalcode", "zip", "zip code", "zipcode", "postcode"],
 };
 
 export interface MappedField {
@@ -101,6 +101,8 @@ function displaySex(value: string | null): string {
 
 function tokens(value: string): string {
   return value
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[_./:-]+/g, " ")
     .replace(/[^a-z0-9\s]/g, " ")
@@ -108,54 +110,63 @@ function tokens(value: string): string {
     .trim();
 }
 
-function scoreKey(hint: string, key: DemographicKey): number {
+function scoreKey(hint: string, key: DemographicKey): { score: number; specificity: number } {
   const text = tokens(hint);
-  if (!text) return 0;
-  let best = 0;
+  if (!text) return { score: 0, specificity: 0 };
+  const words = new Set(text.split(" "));
+  let best = { score: 0, specificity: 0 };
   for (const synonym of SYNONYMS[key]) {
-    if (text === synonym) best = Math.max(best, 100);
-    else if (text.split(" ").join(" ").includes(synonym)) best = Math.max(best, 80);
+    let score = 0;
+    if (text === synonym) score = 100;
+    else if (synonym.includes(" ") && text.includes(synonym)) score = 95;
+    else if (!synonym.includes(" ") && words.has(synonym)) score = 80;
+    if (score > best.score || (score === best.score && score > 0 && synonym.length > best.specificity)) best = { score, specificity: synonym.length };
   }
   return best;
 }
 
-export function classifyHint(hint: string): { key: DemographicKey } | { ambiguous: true } | null {
-  let winner: { key: DemographicKey; score: number } | null = null;
+export function classifyHint(hint: string): { key: DemographicKey; score: number; specificity: number } | { ambiguous: true } | null {
+  let winner: { key: DemographicKey; score: number; specificity: number } | null = null;
   let runner = 0;
   const normalized = tokens(hint);
-  if (/\b(?:date of birth|birth date|birthdate|dob)\b/.test(normalized) && /\b(?:month|day|year)\b/.test(normalized)) return { ambiguous: true };
+  if (/\b(?:address line 2|address line2|addr 2|addr2|country|country name)\b/.test(normalized)) return null;
+  if (/\b(?:gender identity|sexual orientation)\b/.test(normalized)) return null;
+  if (/\b(?:birth|maiden|previous|former|preferred)\b/.test(normalized) && /\b(?:first|last|given|family|name)\b/.test(normalized) && !/\b(?:date|dob|sex|gender)\b/.test(normalized)) return null;
+  if (/\b(?:date of birth|birth date|birthdate|dob|bday|birthday)\b/.test(normalized) && /\b(?:month|day|year)\b/.test(normalized)) return { ambiguous: true };
   for (const key of DEMOGRAPHIC_KEYS) {
-    const score = scoreKey(hint, key);
-    if (!winner || score > winner.score) {
+    const scored = scoreKey(hint, key);
+    if (!winner || scored.score > winner.score) {
       runner = winner?.score ?? 0;
-      winner = { key, score };
-    } else if (score > runner) runner = score;
+      winner = { key, score: scored.score, specificity: scored.specificity };
+    } else if (scored.score === winner.score && scored.specificity > winner.specificity) {
+      winner = { key, score: scored.score, specificity: scored.specificity };
+    } else if (scored.score > runner) runner = scored.score;
   }
   if (!winner || winner.score < 80) return null;
   if (runner >= winner.score - 10 && runner >= 80) return { ambiguous: true };
-  return { key: winner.key };
+  return winner;
 }
 
-function bestKey(control: ScannedControl): { key: DemographicKey; score: number } | null {
+function bestKey(control: ScannedControl): { key: DemographicKey; score: number; specificity: number } | null {
   const hint = `${control.label} ${control.name} ${control.id}`;
   const classified = classifyHint(hint);
   if (!classified || "ambiguous" in classified) return null;
-  return { key: classified.key, score: 100 };
+  return { key: classified.key, score: classified.score, specificity: classified.specificity };
 }
 
 export function mapControls(controls: ScannedControl[], person: PersonDetail): MappedField[] {
   const values = florValues(person);
-  const assigned = new Map<DemographicKey, ScannedControl[]>();
   const scored = controls.map((control) => ({ control, match: bestKey(control) }));
-  for (const row of scored) {
-    if (!row.match) continue;
-    const list = assigned.get(row.match.key) ?? [];
-    list.push(row.control);
-    assigned.set(row.match.key, list);
-  }
-  const ambiguousKeys = new Set<DemographicKey>();
-  for (const [key, list] of assigned) {
-    if (list.length > 1) ambiguousKeys.add(key);
+  const chosen = new Map<DemographicKey, { id: string; name: string; ambiguous: boolean }>();
+  for (const key of DEMOGRAPHIC_KEYS) {
+    const rows = scored.filter((row) => row.match?.key === key);
+    if (rows.length === 0) continue;
+    const ranked = [...rows].sort((left, right) => (right.match?.score ?? 0) - (left.match?.score ?? 0) || (right.match?.specificity ?? 0) - (left.match?.specificity ?? 0));
+    const top = ranked[0];
+    const tied = ranked.filter((row) => row.match && top.match && row.match.score === top.match.score && row.match.specificity === top.match.specificity);
+    const texts = tied.map((row) => row.control.currentValue.trim().toLowerCase());
+    const sameValue = texts.every((text) => text === texts[0] && text !== "");
+    chosen.set(key, { id: top.control.id, name: top.control.name, ambiguous: tied.length > 1 && !sameValue });
   }
   const fields: MappedField[] = [];
   const used = new Set<DemographicKey>();
@@ -176,9 +187,12 @@ export function mapControls(controls: ScannedControl[], person: PersonDetail): M
       continue;
     }
     const key = row.match.key;
+    const pick = chosen.get(key);
+    const winner = Boolean(pick && ((pick.id && pick.id === row.control.id) || (!pick.id && pick.name === row.control.name)));
+    if (!winner) continue;
     used.add(key);
     const florValue = values[key];
-    const ambiguous = ambiguousKeys.has(key);
+    const ambiguous = Boolean(pick?.ambiguous);
     const occupied = !row.control.empty;
     let status: MappedField["status"] = "matched";
     let note = "";

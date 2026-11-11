@@ -11,7 +11,7 @@ export interface PageFact {
   controlName: string;
   tag: "input" | "textarea" | "select" | "radio" | "text";
   inputType: string;
-  evidenceKind: "label" | "aria-label" | "aria-labelledby" | "autocomplete" | "placeholder" | "heading" | "dt" | "th" | "name";
+  evidenceKind: "label" | "aria-label" | "aria-labelledby" | "title" | "autocomplete" | "placeholder" | "heading" | "dt" | "th" | "name";
   evidenceText: string;
 }
 
@@ -87,6 +87,8 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
     }
     const aria = plain(element.getAttribute("aria-label") ?? "");
     if (aria) return { text: aria, kind: "aria-label" };
+    const title = plain(element.getAttribute("title") ?? "");
+    if (title) return { text: title, kind: "title" };
     const auto = plain(element.getAttribute("autocomplete") ?? "");
     if (auto && auto !== "off" && auto !== "on") return { text: auto, kind: "autocomplete" };
     const placeholder = plain(element.getAttribute("placeholder") ?? "");
@@ -109,7 +111,8 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
 
   const blockedSecret = (element: Element, label: string): boolean => {
     const hint = `${element.getAttribute("name") ?? ""} ${element.getAttribute("id") ?? ""} ${element.getAttribute("autocomplete") ?? ""} ${label}`.toLowerCase();
-    return /password|passwd|otp|one-time|cvv|cvc|card.?number|credit.?card|payment|routing|ssn|social security|account number/.test(hint);
+    const words = hint.replace(/[^a-z0-9]+/g, " ");
+    return /password|passwd|otp|one-time|cvv|cvc|card.?number|credit.?card|payment|routing|ssn|social security|account number/.test(hint) || /\bssn\b|\bsocial security\b|\bss\b/.test(words);
   };
 
   const walkControls = (scope: ParentNode) => {
@@ -154,7 +157,10 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
         return;
       }
       let value = "";
-      if (node instanceof HTMLSelectElement) value = node.selectedOptions[0]?.text || node.value;
+      if (node instanceof HTMLSelectElement) {
+        const option = node.selectedOptions[0];
+        value = option?.value ? option.text || option.value : "";
+      }
       else if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) value = node.value;
       const tag = node instanceof HTMLTextAreaElement ? "textarea" : node instanceof HTMLSelectElement ? "select" : "input";
       pushFact({
@@ -238,12 +244,24 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
       addPair(banner, "DOB", dob, "heading");
     }
   }
+  const isPatientLabel = (label: string): boolean => {
+    if (!label || label.length > 40) return false;
+    if (/^(name|patient|patient name|full name)$/i.test(label)) return true;
+    const match = classifyHint(label);
+    return Boolean(match && "key" in match);
+  };
+  root.querySelectorAll("label[for]").forEach((label) => {
+    const id = label.getAttribute("for");
+    const target = id ? root.getElementById(id) : null;
+    const text = tidyLabel(label.textContent ?? "");
+    if (!target || target.matches("input, textarea, select") || !isPatientLabel(text) || blockedSecret(target, text)) return;
+    addPair(target, text, target.textContent ?? "", "label");
+  });
   root.querySelectorAll("span, div, p, label").forEach((element) => {
-    if (element.children.length > 0) return;
+    if (element.children.length > 0 || element.matches("label[for]")) return;
     const label = tidyLabel(element.textContent ?? "");
     const next = element.nextElementSibling;
-    if (!next || next.children.length > 0) return;
-    if (!/^(name|patient|first name|given|given name|last name|family name|surname|dob|date of birth|birthdate|birth date|sex|gender|birth sex|mrn|external id|home phone|phone|email)$/i.test(label)) return;
+    if (!next || next.children.length > 0 || !isPatientLabel(label) || blockedSecret(next, label)) return;
     addPair(next, label, next.textContent ?? "", "label");
   });
 

@@ -63,6 +63,27 @@ describe("current-tab patient reading", () => {
     expect(JSON.stringify(read.draft)).not.toContain("100245");
   });
 
+  it("reads any HTML labels that match FLOR patient fields", () => {
+    const read = readNewPatient(readDocument(mount(`
+      <section>
+        <label for="given">First name</label><span id="given">Ada</span>
+        <label>Last name</label><span>Lovelace</span>
+        <label>City</label><span>London</span>
+        <label>Postal code</label><span>SW1A</span>
+        <label>Notes</label><span>not a patient field</span>
+        <label>Password</label><span>secret-value</span>
+      </section>
+    `)).facts);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.draft.first_name).toBe("Ada");
+    expect(read.draft.last_name).toBe("Lovelace");
+    expect(read.draft.city).toBe("London");
+    expect(read.draft.postal_code).toBe("SW1A");
+    expect(JSON.stringify(read.draft)).not.toContain("not a patient field");
+    expect(JSON.stringify(read.draft)).not.toContain("secret-value");
+  });
+
   it("reads a registration form that is not limited to one demo origin", () => {
     const read = readNewPatient(readDocument(mount(`
       <form>

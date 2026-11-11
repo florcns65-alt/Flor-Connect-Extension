@@ -29,6 +29,40 @@ export const OPENMRS_REGISTRATION = `
   <input type="hidden" name="secretToken" value="hide-me">
 </form>`;
 
+/** Fields taken from the live OpenEMR 8 demo Search or Add Patient form. Titles are how that page names its boxes. */
+export const OPENEMR_NEW_PATIENT = `
+<form id="new-patient">
+  <input id="form_fname" name="form_fname" placeholder="First Name" title="First Name">
+  <input id="form_mname" name="form_mname" placeholder="Middle Name" title="Middle Name">
+  <input id="form_lname" name="form_lname" placeholder="Last Name" title="Last Name">
+  <input id="form_preferred_name" name="form_preferred_name" title="Preferred Name">
+  <input id="form_pubpid" name="form_pubpid" title="External identifier">
+  <input id="form_DOB" name="form_DOB" title="Date of Birth">
+  <select id="form_sex" name="form_sex" title="Birth Sex"><option value="">Unassigned</option><option value="Female">Female</option><option value="Male">Male</option></select>
+  <input id="form_ss" name="form_ss" title="Social Security Number">
+  <input id="form_birth_fname" name="form_birth_fname" placeholder="Birth First Name" title="Birth First Name">
+  <input id="form_birth_lname" name="form_birth_lname" placeholder="Birth Last Name" title="Birth Last Name">
+  <select id="form_gender_identity" name="form_gender_identity" title="Gender Identity"><option value="">Unassigned</option><option value="Female">Identifies as Female</option></select>
+  <select id="form_sexual_orientation" name="form_sexual_orientation" title="Sexual Orientation"><option value="">Unassigned</option><option value="straight">Straight or heterosexual</option></select>
+  <input id="form_street" name="form_street" title="Street and Number">
+  <input id="form_street_line_2" name="form_street_line_2" title="Address Line 2">
+  <input id="form_city" name="form_city" title="City Name">
+  <select id="form_state" name="form_state" title="State/Locality"><option value="">Unassigned</option><option value="CA">California</option><option value="MA">Massachusetts</option></select>
+  <input id="form_postal_code" name="form_postal_code" title="Postal Code">
+  <select id="form_country_code" name="form_country_code" title="Country"><option value="">Unassigned</option><option value="USA">USA</option></select>
+  <input id="form_phone_contact" name="form_phone_contact" title="Emergency Contact Phone Number">
+  <input id="form_phone_home" name="form_phone_home" title="Home Phone Number">
+  <input id="form_phone_biz" name="form_phone_biz" title="Work Phone Number">
+  <input id="form_phone_cell" name="form_phone_cell" title="Cell Phone Number">
+  <input id="form_email" name="form_email" title="Contact Email Address">
+</form>`;
+
+export const OPENEMR_CALENDAR = `
+<table id="appointments">
+  <tr id="emily"><td>Name</td><td>Emily Carter</td></tr>
+  <tr id="james"><td>Name</td><td>James Anderson</td></tr>
+</table>`;
+
 export const SYNTHETIC_PATIENT = {
   id: "22222222-2222-4222-8222-222222222222",
   firstName: "Jane",

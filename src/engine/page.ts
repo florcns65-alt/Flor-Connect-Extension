@@ -54,6 +54,8 @@ export function scanDocument(doc?: Document, frameId = 0): ScannedControl[] {
     }
     const aria = element.getAttribute("aria-label");
     if (aria) return normalizeSpace(aria);
+    const title = element.getAttribute("title");
+    if (title) return normalizeSpace(title);
     const placeholder = element.getAttribute("placeholder");
     if (placeholder) return normalizeSpace(placeholder);
     const cell = element.closest("td, dd");
@@ -112,7 +114,8 @@ export function scanDocument(doc?: Document, frameId = 0): ScannedControl[] {
       let current = "";
       let options: string[] = [];
       if (input instanceof HTMLSelectElement) {
-        current = input.selectedOptions[0]?.text ?? input.value;
+        const option = input.selectedOptions[0];
+        current = option?.value ? option.text || option.value : "";
         options = [...input.options].map((option) => normalizeSpace(option.text || option.value));
       } else {
         current = input.value;

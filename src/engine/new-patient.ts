@@ -132,6 +132,7 @@ function uniqueTexts(values: string[]): string[] {
 function evidenceFor(fact: PageFact): string {
   const quoted = `“${fact.evidenceText || fact.label}”`;
   if (fact.evidenceKind === "heading") return `From the heading ${quoted}`;
+  if (fact.evidenceKind === "title") return `From the field title ${quoted}`;
   if (fact.evidenceKind === "aria-label" || fact.evidenceKind === "aria-labelledby") return `From the accessible name ${quoted}`;
   if (fact.evidenceKind === "autocomplete") return `From autocomplete ${quoted}`;
   return `From the label ${quoted}`;

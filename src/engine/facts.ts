@@ -72,6 +72,7 @@ function sameText(left: string, right: string): boolean {
 
 function evidenceLine(fact: PageFact): string {
   if (fact.evidenceKind === "heading") return `From the heading "${fact.evidenceText}"`;
+  if (fact.evidenceKind === "title") return `From the field title "${fact.evidenceText}"`;
   if (fact.evidenceKind === "autocomplete") return `From autocomplete "${fact.evidenceText}"`;
   if (fact.evidenceKind === "aria-label" || fact.evidenceKind === "aria-labelledby") return `From the accessible name "${fact.evidenceText}"`;
   return `From the label "${fact.evidenceText || fact.label}"`;
@@ -187,12 +188,58 @@ export function mixedFactsUnlocked(_confirmed: boolean, regionOk: boolean): bool
   return regionOk;
 }
 
+function frameHasWritableName(group: PageFact[]): boolean {
+  let first = false;
+  let last = false;
+  for (const fact of group) {
+    if (!fact.writable) continue;
+    const match = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
+    if (!match || !("key" in match)) continue;
+    if (match.key === "first_name") first = true;
+    if (match.key === "last_name") last = true;
+  }
+  return first && last;
+}
+
+/** Keep the frame that holds the form. A calendar or message list in another frame is not the form. */
+export function factsFromTargetFrames(facts: PageFact[]): PageFact[] {
+  const groups = new Map<number, PageFact[]>();
+  for (const fact of facts) {
+    const list = groups.get(fact.frameId) ?? [];
+    list.push(fact);
+    groups.set(fact.frameId, list);
+  }
+  if (groups.size <= 1) return facts;
+  const forms = [...groups.values()].filter((group) => frameHasWritableName(group));
+  if (forms.length > 0) return forms.flat();
+  const single = [...groups.values()].filter((group) => !detectPeople(group).mixed);
+  if (single.length > 0 && single.length < groups.size) return single.flat();
+  return facts;
+}
+
 export function mapPageFacts(facts: PageFact[], person: PersonDetail): { fields: MappedField[]; writable: number; mixed: boolean; people: DetectedPerson[] } {
   const values = florValues(person);
   const detected = detectPeople(facts);
   const fields: MappedField[] = [];
   const used = new Set<DemographicKey>();
   const fullName = [person.firstName, person.lastName].filter(Boolean).join(" ");
+  const ranked = new Map<DemographicKey, { id: string; name: string; score: number; specificity: number; value: string; ambiguous: boolean }>();
+  for (const fact of facts) {
+    const classified = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
+    if (!classified || !("key" in classified)) continue;
+    const current = ranked.get(classified.key);
+    if (!current) {
+      ranked.set(classified.key, { id: fact.controlId, name: fact.controlName, score: classified.score, specificity: classified.specificity, value: fact.value, ambiguous: false });
+      continue;
+    }
+    const better = classified.score > current.score || (classified.score === current.score && classified.specificity > current.specificity);
+    if (better) ranked.set(classified.key, { id: fact.controlId, name: fact.controlName, score: classified.score, specificity: classified.specificity, value: fact.value, ambiguous: false });
+    else if (classified.score === current.score && classified.specificity === current.specificity) {
+      const left = current.value.trim().toLowerCase();
+      const right = fact.value.trim().toLowerCase();
+      if (!left || !right || left !== right) current.ambiguous = true;
+    }
+  }
 
   const push = (field: MappedField) => {
     if (field.key) used.add(field.key);
@@ -226,9 +273,12 @@ export function mapPageFacts(facts: PageFact[], person: PersonDetail): { fields:
       continue;
     }
     const key = classified.key;
+    const pick = ranked.get(key);
+    const winner = Boolean(pick && ((pick.id && pick.id === fact.controlId) || (!pick.id && pick.name === fact.controlName)));
+    if (!winner) continue;
     if (key === "mrn" && !usableRecordId(fact.value)) continue;
     const ambiguousDate = key === "date_of_birth" && dateCertainty(fact.value) === "ambiguous";
-    const duplicate = fields.some((field) => field.key === key && field.status === "matched");
+    const duplicate = Boolean(pick?.ambiguous);
     const occupied = Boolean(fact.value) && fact.writable;
     const selected = !ambiguousDate && !duplicate && (fact.writable ? !occupied && Boolean(values[key]) : Boolean(fact.value));
     push({
@@ -290,7 +340,7 @@ function fieldFrom(fact: PageFact, key: DemographicKey, pageValue: string, florV
   };
 }
 
-export function identityFor(fields: MappedField[], person: PersonDetail, facts: PageFact[] = []): { matches: boolean; blockSave: boolean; summary: string; kind: "match" | "mismatch" | "unknown" } {
+export function identityFor(fields: MappedField[], person: PersonDetail, facts: PageFact[] = []): { matches: boolean; blockSave: boolean; blockFill: boolean; summary: string; kind: "match" | "mismatch" | "unknown" } {
   const read = (key: DemographicKey) => fields.find((field) => field.key === key && field.status === "matched")?.pageValue ?? "";
   const first = read("first_name");
   const last = read("last_name");
@@ -299,28 +349,35 @@ export function identityFor(fields: MappedField[], person: PersonDetail, facts: 
   const fullName = facts.find((fact) => /^(name|patient|patient name)$/i.test(fact.label))?.value ?? "";
   const selectedName = [person.firstName, person.lastName].filter(Boolean).join(" ");
   const dobAmbiguous = !dob && fields.some((field) => field.key === "date_of_birth" && field.status === "ambiguous");
+  const result = (kind: "match" | "mismatch" | "unknown", summary: string, matches = false) => ({
+    matches,
+    blockSave: kind !== "match",
+    blockFill: kind === "mismatch",
+    summary,
+    kind,
+  });
   if (!first && !last && !dob) {
-    return { matches: false, blockSave: true, kind: "unknown", summary: "This page does not show a name or date of birth, so it cannot be checked against the selected patient." };
+    return result("unknown", "This form doesn't name a patient yet. It can be filled from FLOR. It can't be saved into FLOR until it shows this patient.");
   }
   const nameOk = (!first || sameText(first, person.firstName ?? "")) && (!last || sameText(last, person.lastName ?? ""));
   const dobOk = !dob || sameText(dob, formatDob(person.dateOfBirth)) || sameText(dob, person.dateOfBirth ?? "") || isoDate(dob) === (person.dateOfBirth ?? "").slice(0, 10);
   const mrnOk = !mrn || sameText(mrn, person.mrn ?? "");
   if ((first || last) && !nameOk) {
-    return { matches: false, blockSave: true, kind: "mismatch", summary: "This page does not match the selected patient. Choosing a different box cannot override that." };
+    return result("mismatch", "This page does not match the selected patient. Choosing a different box cannot override that.");
   }
   if (fullName && !samePersonName(fullName, selectedName)) {
-    return { matches: false, blockSave: true, kind: "mismatch", summary: "The patient name on this page does not match the selected patient. Choosing a different box cannot override that." };
+    return result("mismatch", "The patient name on this page does not match the selected patient. Choosing a different box cannot override that.");
   }
   if (dob && (!dobOk || dobAmbiguous)) {
-    return { matches: false, blockSave: true, kind: dobAmbiguous ? "unknown" : "mismatch", summary: dobAmbiguous ? "The date of birth on this page could be read two ways, so nothing will be saved." : "The date of birth on this page does not match the selected patient, so nothing will be saved." };
+    return result(dobAmbiguous ? "unknown" : "mismatch", dobAmbiguous ? "The date of birth on this page could be read two ways, so nothing will be saved." : "The date of birth on this page does not match the selected patient, so nothing will be saved.");
   }
   if (mrn && !mrnOk) {
-    return { matches: false, blockSave: true, kind: "mismatch", summary: "The medical record number on this page does not match the selected patient." };
+    return result("mismatch", "The medical record number on this page does not match the selected patient.");
   }
   if (!dob) {
-    return { matches: false, blockSave: true, kind: "unknown", summary: "The name matches, but this page has no date of birth, so nothing will be saved." };
+    return result("unknown", "The name matches, but this page has no date of birth, so nothing will be saved.");
   }
-  return { matches: true, blockSave: false, kind: "match", summary: `Name and date of birth match ${[person.firstName, person.lastName].filter(Boolean).join(" ")}.` };
+  return result("match", `Name and date of birth match ${[person.firstName, person.lastName].filter(Boolean).join(" ")}.`, true);
 }
 
 export function pageSignature(facts: PageFact[]): string {
