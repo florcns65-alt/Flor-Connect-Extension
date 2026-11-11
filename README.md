@@ -16,11 +16,18 @@ You need Chrome 116 or newer, and Node 20 or newer.
 ```bash
 cd /Users/florincoporation/Desktop/flor-connect-extension
 npm ci
-export FLOR_SUPABASE_PUBLISHABLE_KEY="the-publishable-anon-key"
 npm run build
 ```
 
-Use the Supabase publishable key for project `wbxzevwfxizfjtxrarjq`. Do not use the service-role key. The build fails if the key is missing.
+Put the Supabase publishable key in `.env` in this folder:
+
+```bash
+FLOR_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
+
+`.env` is not committed. Do not use the service-role key. The build fails if the key is missing.
+
+For the Chrome Web Store workflow, add the same name as a repository secret: `FLOR_SUPABASE_PUBLISHABLE_KEY`. CI keeps using a dummy key.
 
 3. Open `chrome://extensions`.
 4. Turn on **Developer mode**.

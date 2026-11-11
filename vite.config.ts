@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import preview from "./config/preview.json";
 import prod from "./config/prod.json";
 import { buildManifest } from "./src/shared/manifest";
@@ -34,14 +34,14 @@ function assertPublishableKey(key: string): void {
   }
 }
 
-function loadProfile(profile: "preview" | "prod"): FlorBuildConfig {
+function loadProfile(profile: "preview" | "prod", env: Record<string, string>): FlorBuildConfig {
   const file = (profile === "prod" ? prod : preview) as ProfileFile;
   if (file.supabasePublishableKey !== PLACEHOLDER) {
     throw new Error(
       `config/${profile}.json must keep supabasePublishableKey set to ${PLACEHOLDER}. The real key is injected from FLOR_SUPABASE_PUBLISHABLE_KEY.`,
     );
   }
-  const key = process.env.FLOR_SUPABASE_PUBLISHABLE_KEY?.trim();
+  const key = (process.env.FLOR_SUPABASE_PUBLISHABLE_KEY || env.FLOR_SUPABASE_PUBLISHABLE_KEY)?.trim();
   if (!key) {
     throw new Error(
       "Missing FLOR_SUPABASE_PUBLISHABLE_KEY. Set it to the Supabase publishable (anon) key before building. Do not use a service-role key.",
@@ -114,8 +114,9 @@ export default defineConfig(({ mode }) => {
   }
 
   const store = mode === "store";
-  const profile = process.env.FLOR_PROFILE === "prod" ? "prod" : "preview";
-  const config = loadProfile(profile);
+  const env = loadEnv(mode, process.cwd(), "");
+  const profile = (process.env.FLOR_PROFILE || env.FLOR_PROFILE) === "prod" ? "prod" : "preview";
+  const config = loadProfile(profile, env);
   const version = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string })
     .version;
 
