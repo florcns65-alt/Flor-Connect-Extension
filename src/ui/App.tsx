@@ -101,7 +101,7 @@ export function App() {
   if (route === "patient") {
     const personName = patient ? `${patient.firstName ?? ""} ${patient.lastName ?? ""}`.trim() : "patient";
     if (transfer.model?.kind === "cant-read") {
-      return <CantRead personName={personName} onRetry={transfer.retry} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
+      return <CantRead personName={personName} message={transfer.model.message} counts={transfer.model.counts} onRetry={transfer.retry} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
     }
     if (transfer.model?.kind === "chart" && patient) {
       return <ChartRead person={patient} fields={transfer.model.fields} identity={transfer.model.identity} host={transfer.model.host} pageTitle={transfer.model.pageTitle} frameNote={transfer.model.frameNote} onReview={transfer.reviewSave} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;

@@ -33,11 +33,11 @@ const LABELS: Record<DemographicKey, string> = {
 };
 
 const SYNONYMS: Record<DemographicKey, string[]> = {
-  first_name: ["first name", "given name", "forename", "fname", "form fname", "patient first name"],
+  first_name: ["first name", "given name", "given", "forename", "fname", "form fname", "patient first name"],
   last_name: ["last name", "family name", "surname", "lname", "form lname"],
   date_of_birth: ["date of birth", "birth date", "birthdate", "dob", "born", "form dob", "bday"],
   sex: ["sex", "gender", "administrative sex", "birth sex", "form sex"],
-  mrn: ["mrn", "external id", "external identifier", "medical record number", "patient id", "identifier", "pubpid", "form pubpid"],
+  mrn: ["mrn", "medical record number", "medical record", "external id", "pubpid", "form pubpid"],
   phone: ["home phone", "phone", "telephone", "mobile phone", "phone number", "form phone home", "tel"],
   email: ["email", "e-mail", "email address", "form email"],
   address_line1: ["address", "street", "address line 1", "address 1", "street address"],

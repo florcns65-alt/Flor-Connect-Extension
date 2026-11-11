@@ -13,7 +13,7 @@ function PatientChip({ person, host, pageTitle }: { person: PersonDetail; host?:
         <span className="avatar tone-a">{personInitials(name)}</span>
         <div>
           <strong>
-            {name} <span className="example-pill">Example</span>
+            {name}
           </strong>
           <p className="person-meta">
             {[formatDob(person.dateOfBirth), person.sex, person.mrn ? `MRN ${person.mrn}` : ""].filter(Boolean).join(" · ")}
@@ -23,7 +23,7 @@ function PatientChip({ person, host, pageTitle }: { person: PersonDetail; host?:
       {host ? (
         <div className="page-chip">
           <span>{host}{pageTitle ? ` · ${pageTitle}` : ""}</span>
-          <span className="person-meta">Example form</span>
+          <span className="person-meta">Open page</span>
         </div>
       ) : null}
     </div>
@@ -299,12 +299,12 @@ export function SavePreview({
         <div className="identity">
           <span className="avatar tone-a">{personInitials(personDisplayName(person))}</span>
           <div>
-            <strong>{personDisplayName(person)} <span className="example-pill">Example</span></strong>
+            <strong>{personDisplayName(person)}</strong>
             <p className="person-meta">{[formatDob(person.dateOfBirth), person.sex, person.mrn ? `MRN ${person.mrn}` : ""].filter(Boolean).join(" · ")}</p>
           </div>
         </div>
         <p className={blocked ? "identity-flag bad" : "identity-flag"}>{identity}</p>
-        <div className="page-chip"><span>{host} · {pageTitle}</span><span className="person-meta">Example form</span></div>
+        <div className="page-chip"><span>{host} · {pageTitle}</span><span className="person-meta">Open page</span></div>
       </div>
       {error ? <p className="form-error">{error}</p> : null}
       <p className="section-heading">{fields.length} fields found on this page</p>
@@ -332,7 +332,7 @@ export function ChartRead({
     <TransferChrome personName={personDisplayName(person)} title="Read this chart" lede="Here's what we found on this page. Nothing is saved yet." onBack={onBack} workspaceName={workspaceName} initials={initials} action={<button type="button" className="btn-primary" onClick={onReview}>Review and save to FLOR</button>} foot="This page is read only. We won't type into it.">
       <PatientChip person={person} host={host} pageTitle={pageTitle} />
       <p className={identity.startsWith("Name and date") ? "identity-flag" : "identity-flag bad"}>{identity}</p>
-      <p className="page-note">Example chart · Read only</p>
+      <p className="page-note">Read only</p>
       {frameNote ? <p className="body-copy">{frameNote}</p> : null}
       <p className="section-heading">{shown.length} details from this chart</p>
       <div className="card">
@@ -398,7 +398,7 @@ export function MappingReview({
   );
 }
 
-export function CantRead({ personName, onRetry, onBack, workspaceName, initials }: { personName: string; onRetry: () => void; onBack: () => void; workspaceName: string | null; initials: string }) {
+export function CantRead({ personName, message, counts, onRetry, onBack, workspaceName, initials }: { personName: string; message: string; counts: string; onRetry: () => void; onBack: () => void; workspaceName: string | null; initials: string }) {
   return (
     <main className="screen transfer">
       <Header workspaceName={workspaceName} workspaces={[]} workspaceId={null} initials={initials} onSelectWorkspace={() => undefined} onOpenSettings={() => undefined} />
@@ -406,7 +406,8 @@ export function CantRead({ personName, onRetry, onBack, workspaceName, initials 
       <div className="scroll result-copy">
         <div className="empty-icon" aria-hidden="true">▭</div>
         <h1 className="screen-title">We can't read this page</h1>
-        <p className="body-copy">This tab doesn't have text or boxes we can use. Files, pictures of forms, and desktop programs aren't readable this way — and not every EHR works the same.</p>
+        <p className="body-copy">{message || "This tab doesn't have text or boxes we can use. Files, pictures of forms, and desktop programs aren't readable this way — and not every EHR works the same."}</p>
+        {counts ? <p className="person-meta">{counts}</p> : null}
       </div>
       <button type="button" className="btn-primary" onClick={onRetry}>Try again</button>
       <button type="button" className="text-button" onClick={onBack}>Back to {personName}</button>
@@ -423,12 +424,12 @@ export function MultiPerson({
     <TransferChrome personName={personDisplayName(person)} title="More than one person" lede="We won't save until it's clear who this is." onBack={onCancel} workspaceName={workspaceName} initials={initials} action={<><button type="button" className="btn-primary" onClick={onChoose}>This is {personDisplayName(person)}</button><button type="button" className="text-button" onClick={onCancel}>Cancel</button></>}>
       <p className="identity-flag warn">{warning || "Two names were found. Mixing people from a list would be unsafe."}</p>
       <div className="card person-choice">
-        <div className="identity"><span className="avatar tone-a">{personInitials(personDisplayName(person))}</span><div><strong>{personDisplayName(person)} <span className="example-pill">Example</span></strong><p className="person-meta">{[formatDob(person.dateOfBirth), person.sex, person.mrn ? `MRN ${person.mrn}` : ""].filter(Boolean).join(" · ")}</p></div></div>
+        <div className="identity"><span className="avatar tone-a">{personInitials(personDisplayName(person))}</span><div><strong>{personDisplayName(person)}</strong><p className="person-meta">{[formatDob(person.dateOfBirth), person.sex, person.mrn ? `MRN ${person.mrn}` : ""].filter(Boolean).join(" · ")}</p></div></div>
         <p className="person-meta">Selected in FLOR</p>
       </div>
       {others.map((other) => (
         <div className="card person-choice" key={other.name}>
-          <div className="identity"><span className="avatar">{personInitials(other.name)}</span><div><strong>{other.name} <span className="example-pill">Example</span></strong>{other.mrn ? <p className="person-meta">MRN {other.mrn}</p> : null}</div></div>
+          <div className="identity"><span className="avatar">{personInitials(other.name)}</span><div><strong>{other.name}</strong>{other.mrn ? <p className="person-meta">MRN {other.mrn}</p> : null}</div></div>
           <p className="person-meta">Also on this page</p>
         </div>
       ))}

@@ -17,6 +17,7 @@ export interface PageFact {
 export interface PageRead {
   facts: PageFact[];
   closedControls: number;
+  unlabeledControls: number;
   frameId: number;
 }
 
@@ -36,7 +37,9 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
   const root = doc ?? document;
   const facts: PageFact[] = [];
   let closedControls = 0;
+  let unlabeledControls = 0;
   const seen = new Set<string>();
+  const tidyLabel = (value: string): string => plain(value).replace(/:$/, "").replace(/\s*\([^)]*\)\s*$/g, "").trim();
 
   const regionOf = (element: Element): string => {
     const region = element.closest("tr, li, fieldset, section, article, [data-patient]");
@@ -83,6 +86,15 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
     if (auto && auto !== "off" && auto !== "on") return { text: auto, kind: "autocomplete" };
     const placeholder = plain(element.getAttribute("placeholder") ?? "");
     if (placeholder) return { text: placeholder, kind: "placeholder" };
+    let sibling: Element | null = element.previousElementSibling;
+    while (sibling) {
+      const text = tidyLabel(sibling.textContent ?? "");
+      if (text && text.length <= 40 && !sibling.querySelector("input, textarea, select")) return { text, kind: "label" };
+      sibling = sibling.previousElementSibling;
+    }
+    const parentLabel = element.parentElement?.querySelector(":scope > label");
+    const parentText = tidyLabel(parentLabel?.textContent ?? "");
+    if (parentText && parentText.length <= 40) return { text: parentText, kind: "label" };
     const cell = element.closest("td, dd");
     const previous = cell?.previousElementSibling;
     const beside = plain(previous?.textContent ?? "");
@@ -101,9 +113,14 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
       const type = (node.getAttribute("type") || "").toLowerCase();
       if (["hidden", "password", "file", "submit", "button", "reset", "image", "checkbox"].includes(type)) return;
       const labelled = labelFor(node);
-      if (blockedSecret(node, labelled.text)) return;
+      labelled.text = tidyLabel(labelled.text);
+      if (blockedSecret(node, labelled.text) || /ssn|social security|s\.s\./i.test(labelled.text)) return;
       if (node.hasAttribute("disabled") || node.hasAttribute("readonly")) {
         closedControls += 1;
+        return;
+      }
+      if (!labelled.text) {
+        unlabeledControls += 1;
         return;
       }
       const view = node.ownerDocument.defaultView;
@@ -187,20 +204,49 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
         return;
       }
       if (cells.length === 2) addPair(cells[1], cells[0].textContent ?? "", cells[1].textContent ?? "", "th");
+      if (cells.length >= 3 && /^name$/i.test(tidyLabel(cells[0].textContent ?? ""))) {
+        addPair(cells[1], "Given", cells[1].textContent ?? "", "th");
+        addPair(cells[2], "Family Name", cells[2].textContent ?? "", "th");
+      }
     });
   });
-  root.querySelectorAll("h1, h2, h3, h4").forEach((heading) => {
+  root.querySelectorAll("h2, h3, h4").forEach((heading) => {
     const next = heading.nextElementSibling;
     if (!next) return;
     if (next.querySelector("input, textarea, select, table, dl, p, div")) return;
     addPair(next, heading.textContent ?? "", next.textContent ?? "", "heading");
   });
+  const banner = root.querySelector("h1");
+  if (banner) {
+    const bannerName = tidyLabel(banner.textContent ?? "").replace(/\s*\(\d+\)\s*$/, "");
+    const words = bannerName.split(/\s+/).filter(Boolean);
+    const nameLike = words.length >= 2 && words.length <= 4 && words.every((word) => /^[\p{L}][\p{L}'.-]*$/u.test(word));
+    const parent = banner.parentElement;
+    const parentText = plain(parent?.textContent ?? "");
+    const around = parent && parent !== root.body && parentText.length > 0 && parentText.length < 240
+      ? parent.textContent ?? ""
+      : `${banner.nextElementSibling?.textContent ?? ""} ${banner.nextElementSibling?.nextElementSibling?.textContent ?? ""}`;
+    const dated = around.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2})[.\s]([A-Za-z]{3,})[.\s](\d{4})/);
+    if (nameLike) addPair(banner, "Name", bannerName, "heading");
+    if (dated) {
+      const dob = dated[1] || `${dated[2]} ${dated[3]} ${dated[4]}`;
+      addPair(banner, "DOB", dob, "heading");
+    }
+  }
+  root.querySelectorAll("span, div, p, label").forEach((element) => {
+    if (element.children.length > 0) return;
+    const label = tidyLabel(element.textContent ?? "");
+    const next = element.nextElementSibling;
+    if (!next || next.children.length > 0) return;
+    if (!/^(name|patient|first name|given|given name|last name|family name|surname|dob|date of birth|birthdate|birth date|sex|gender|birth sex|mrn|external id|home phone|phone|email)$/i.test(label)) return;
+    addPair(next, label, next.textContent ?? "", "label");
+  });
 
   walkControls(root);
-  return { facts, closedControls, frameId };
+  return { facts, closedControls, unlabeledControls, frameId };
 }
 
-export function mergeReads(parts: Array<PageRead | null>): { facts: PageFact[]; frameErrors: number; closedControls: number } {
+export function mergeReads(parts: Array<PageRead | null>): { facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number } {
   const facts: PageFact[] = [];
   let frameErrors = 0;
   let closedControls = 0;
@@ -212,7 +258,7 @@ export function mergeReads(parts: Array<PageRead | null>): { facts: PageFact[]; 
     closedControls += part.closedControls;
     facts.push(...part.facts);
   }
-  return { facts, frameErrors, closedControls };
+  return { facts, frameErrors, closedControls, unlabeledControls: parts.reduce((sum, part) => sum + (part?.unlabeledControls ?? 0), 0) };
 }
 
 export function installFieldPicker(doc?: Document): void {

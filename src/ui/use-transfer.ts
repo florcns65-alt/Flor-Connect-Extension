@@ -26,7 +26,7 @@ import { PersonChartSchema } from "../shared/messages";
 import type { PersonDetail } from "../shared/types";
 import { request } from "./bridge";
 import { useFlorStore } from "./store";
-import { chromeFormAccess, readActivePage } from "./transfer-tab";
+import { cachedActiveTab, chromeFormAccess, readActivePage, watchActiveTab } from "./transfer-tab";
 
 type PageContext = {
   facts: PageFact[];
@@ -41,7 +41,7 @@ type PageContext = {
 export type TransferModel =
   | { kind: "scanning" }
   | { kind: "no-form"; message: string }
-  | { kind: "cant-read" }
+  | { kind: "cant-read"; message: string; counts: string }
   | ({ kind: "chart"; identity: string; blocked: boolean } & PageContext)
   | ({ kind: "mapping"; direction: "fill" | "save"; remember: boolean; blocked: boolean; identity: string } & PageContext)
   | ({ kind: "multi"; direction: "fill" | "save"; people: Array<{ name: string; mrn: string }>; error: string } & PageContext)
@@ -68,6 +68,9 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   const [model, setModel] = useState<TransferModel | null>(null);
   const access = useMemo(() => chromeFormAccess(), []);
   const memory = sessionLayoutsStore();
+  useEffect(() => {
+    watchActiveTab();
+  }, []);
   const pickTabId = model?.kind === "pick" ? model.lock.tabId : 0;
 
   useEffect(() => {
@@ -119,6 +122,19 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
     setModel({ ...page, kind: "mapping", direction, remember: false, blocked: identity.blockSave, identity: identity.summary });
   }
 
+  function begin(direction: "fill" | "save"): void {
+    const tab = cachedActiveTab();
+    if (!tab) {
+      void scan(direction);
+      return;
+    }
+    const pattern = `${new URL(tab.url).origin}/*`;
+    void chrome.permissions.request({ origins: [pattern] }).then(
+      () => scan(direction),
+      () => scan(direction),
+    );
+  }
+
   async function scan(direction: "fill" | "save"): Promise<void> {
     if (!person || !workspaceId) return;
     setModel({ kind: "scanning" });
@@ -129,8 +145,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       read: access.read,
     });
     if (!result.ok || !person) {
-      setModel(result.ok || result.reason === "permission" ? { kind: "cant-read" } : { kind: "cant-read" });
-      if (!result.ok && result.reason === "no-tab") setModel({ kind: "cant-read" });
+      setModel({ kind: "cant-read", message: result.ok ? "This page could not be checked." : result.message, counts: result.ok ? "" : result.counts });
       return;
     }
     const page = readablePageLabel(result.tab.url, result.tab.title);
@@ -145,7 +160,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       layoutNote: "",
     };
     if (result.facts.length === 0) {
-      setModel({ kind: "cant-read" });
+      setModel({ kind: "cant-read", message: "This tab doesn't have text or boxes we can use.", counts: "" });
       return;
     }
     await openMapped(direction, context, result.facts);
@@ -154,7 +169,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   async function confirmFill(fields: MappedField[], lock: TransferLock, host: string): Promise<void> {
     const current = await access.currentTab(lock.tabId);
     if (!current || !samePatient(lock) || !locksMatch(lock, { ...lock, tabId: current.id, url: current.url })) {
-      setModel({ kind: "cant-read" });
+      setModel({ kind: "cant-read", message: "The tab or patient changed. Nothing was typed.", counts: "" });
       return;
     }
     const results = await access.fill(lock.tabId, instructionsFor(fields));
@@ -165,9 +180,9 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   return {
     model,
     close: () => setModel(null),
-    startFill: () => void scan("fill"),
-    startSave: () => void scan("save"),
-    retry: () => void scan(model && "direction" in model ? model.direction : "save"),
+    startFill: () => begin("fill"),
+    startSave: () => begin("save"),
+    retry: () => begin(model && "direction" in model ? model.direction : "save"),
     toggle(index: number) {
       setModel((current) => {
         if (!current || (current.kind !== "preview" && current.kind !== "conflicts" && current.kind !== "mapping" && current.kind !== "chart")) return current;

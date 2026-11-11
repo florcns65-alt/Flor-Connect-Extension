@@ -33,7 +33,7 @@ export function dateCertainty(value: string): "iso" | "named" | "unambiguous" | 
   const text = value.trim();
   if (!text) return "no";
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return "iso";
-  if (/^\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}$/.test(text)) return "named";
+  if (/^\d{1,2}[.\s]+[A-Za-z]{3,}[.\s]+\d{4}$/.test(text)) return "named";
   const numeric = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
   if (!numeric) return "no";
   const first = Number(numeric[1]);
@@ -49,7 +49,7 @@ export function isoDate(value: string): string {
   if (certainty === "iso") return value.trim();
   if (certainty === "named") {
     const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-    const named = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(value.trim());
+    const named = /^(\d{1,2})[.\s]+([A-Za-z]+)[.\s]+(\d{4})$/.exec(value.trim());
     if (!named) return "";
     const month = months.indexOf(named[2].slice(0, 3).toLowerCase());
     if (month < 0) return "";
@@ -66,7 +66,8 @@ export function isoDate(value: string): string {
 }
 
 function sameText(left: string, right: string): boolean {
-  return left.trim().toLowerCase().replace(/\s+/g, " ") === right.trim().toLowerCase().replace(/\s+/g, " ");
+  const norm = (value: string) => value.normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
+  return norm(left) === norm(right);
 }
 
 function evidenceLine(fact: PageFact): string {
@@ -76,6 +77,52 @@ function evidenceLine(fact: PageFact): string {
   return `From the label "${fact.evidenceText || fact.label}"`;
 }
 
+function nameTokens(value: string): string[] {
+  return value
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/\s*\(\d+\)\s*$/g, "")
+    .replace(/[^\p{L}\s']/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
+function displayName(value: string): string {
+  return value.normalize("NFC").replace(/\s*\(\d+\)\s*$/g, "").replace(/\s+/g, " ").trim();
+}
+
+function joinName(first: string, last: string): string {
+  const given = displayName(first);
+  const family = displayName(last);
+  if (!given) return family;
+  if (!family) return given;
+  const givenTokens = nameTokens(given);
+  const familyTokens = nameTokens(family);
+  const tail = givenTokens.slice(-familyTokens.length).join(" ");
+  if (tail === familyTokens.join(" ")) return given;
+  return `${given} ${family}`;
+}
+
+function samePersonName(left: string, right: string): boolean {
+  const a = nameTokens(left);
+  const b = nameTokens(right);
+  if (a.length === 0 || b.length === 0) return false;
+  const shrink = (tokens: string[]) => {
+    const copy = [...tokens];
+    while (copy.length >= 2 && copy[copy.length - 1] === copy[copy.length - 2]) copy.pop();
+    return copy.join(" ");
+  };
+  return shrink(a) === shrink(b);
+}
+
+function usableRecordId(value: string): string {
+  const text = value.trim();
+  if (/^\d{1,3}$/.test(text)) return "";
+  return text;
+}
+
 export function detectPeople(facts: PageFact[]): { people: DetectedPerson[]; mixed: boolean } {
   const byRegion = new Map<string, PageFact[]>();
   for (const fact of facts) {
@@ -83,9 +130,9 @@ export function detectPeople(facts: PageFact[]): { people: DetectedPerson[]; mix
     list.push(fact);
     byRegion.set(fact.regionId, list);
   }
-  const people: DetectedPerson[] = [];
+  const found: Array<DetectedPerson & { dob: string }> = [];
   for (const [regionId, group] of byRegion) {
-    const names = group.filter((fact) => /^(name|patient|patient name)$/i.test(fact.label)).map((fact) => fact.value);
+    const named = group.filter((fact) => /^(name|patient|patient name)$/i.test(fact.label)).map((fact) => fact.value);
     const firstFact = group.find((fact) => {
       const match = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
       return match && "key" in match && match.key === "first_name";
@@ -94,20 +141,36 @@ export function detectPeople(facts: PageFact[]): { people: DetectedPerson[]; mix
       const match = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
       return match && "key" in match && match.key === "last_name";
     });
+    const dobFact = group.find((fact) => {
+      const match = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
+      return match && "key" in match && match.key === "date_of_birth";
+    });
     const mrnFact = group.find((fact) => {
       const match = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
       return match && "key" in match && match.key === "mrn";
     });
-    const uniqueNames = [...new Set(names.map((name) => name.toLowerCase()))];
-    if (uniqueNames.length > 1) {
-      for (const name of names) people.push({ regionId, name, mrn: mrnFact?.value ?? "" });
-      continue;
-    }
-    const combined = uniqueNames[0] ? names[0] : firstFact && lastFact ? `${firstFact.value} ${lastFact.value}` : "";
-    if (combined) people.push({ regionId, name: combined, mrn: mrnFact?.value ?? "" });
+    const assembled = firstFact || lastFact ? joinName(firstFact?.value ?? "", lastFact?.value ?? "") : "";
+    const full = named[0] ? displayName(named[0]) : "";
+    const name = full && assembled && samePersonName(full, assembled) ? (nameTokens(full).length <= nameTokens(assembled).length ? full : assembled) : full || assembled;
+    if (!name) continue;
+    found.push({ regionId, name, mrn: usableRecordId(mrnFact?.value ?? ""), dob: dobFact?.value ?? "" });
   }
-  const distinct = new Set(people.map((person) => person.name.toLowerCase()));
-  return { people, mixed: distinct.size > 1 };
+  const clusters: Array<DetectedPerson & { dob: string }> = [];
+  for (const person of found) {
+    const match = clusters.find((other) => {
+      if (!samePersonName(other.name, person.name)) return false;
+      const dobConflict = other.dob && person.dob && isoDate(other.dob) !== isoDate(person.dob);
+      const mrnConflict = other.mrn && person.mrn && other.mrn.toLowerCase() !== person.mrn.toLowerCase();
+      if (dobConflict || mrnConflict) return false;
+      const otherKnown = Boolean(other.dob || other.mrn);
+      const personKnown = Boolean(person.dob || person.mrn);
+      return otherKnown || personKnown || samePersonName(other.name, person.name) && other.regionId === person.regionId;
+    });
+    if (!match) clusters.push({ ...person });
+    else if (nameTokens(person.name).length < nameTokens(match.name).length) match.name = person.name;
+  }
+  const people = clusters.map(({ regionId, name, mrn }) => ({ regionId, name, mrn }));
+  return { people, mixed: people.length > 1 };
 }
 
 export function confirmRegion(facts: PageFact[], regionId: string, person: PersonDetail): { ok: boolean; reason: string; facts: PageFact[] } {
@@ -167,6 +230,7 @@ export function mapPageFacts(facts: PageFact[], person: PersonDetail): { fields:
       continue;
     }
     const key = classified.key;
+    if (key === "mrn" && !usableRecordId(fact.value)) continue;
     const ambiguousDate = key === "date_of_birth" && dateCertainty(fact.value) === "ambiguous";
     const duplicate = fields.some((field) => field.key === key && field.status === "matched");
     const occupied = Boolean(fact.value) && fact.writable;
@@ -230,26 +294,32 @@ function fieldFrom(fact: PageFact, key: DemographicKey, pageValue: string, florV
   };
 }
 
-export function identityFor(fields: MappedField[], person: PersonDetail): { matches: boolean; blockSave: boolean; summary: string } {
+export function identityFor(fields: MappedField[], person: PersonDetail): { matches: boolean; blockSave: boolean; summary: string; kind: "match" | "mismatch" | "unknown" } {
   const read = (key: DemographicKey) => fields.find((field) => field.key === key && field.status === "matched")?.pageValue ?? "";
   const first = read("first_name");
   const last = read("last_name");
   const dob = read("date_of_birth");
-  const mrn = read("mrn");
-  const dobAmbiguous = fields.some((field) => field.key === "date_of_birth" && field.status === "ambiguous");
-  if (!first && !last && !dob && !mrn) {
-    return { matches: false, blockSave: true, summary: "This page does not show a name or date of birth, so it cannot be checked against the selected patient." };
+  const mrn = usableRecordId(read("mrn"));
+  const dobAmbiguous = !dob && fields.some((field) => field.key === "date_of_birth" && field.status === "ambiguous");
+  if (!first && !last && !dob) {
+    return { matches: false, blockSave: true, kind: "unknown", summary: "This page does not show a name or date of birth, so it cannot be checked against the selected patient." };
   }
   const nameOk = (!first || sameText(first, person.firstName ?? "")) && (!last || sameText(last, person.lastName ?? ""));
   const dobOk = !dob || sameText(dob, formatDob(person.dateOfBirth)) || sameText(dob, person.dateOfBirth ?? "") || isoDate(dob) === (person.dateOfBirth ?? "").slice(0, 10);
   const mrnOk = !mrn || sameText(mrn, person.mrn ?? "");
-  if (nameOk && dobOk && mrnOk && !dobAmbiguous) {
-    return { matches: true, blockSave: false, summary: `Name and date of birth match ${[person.firstName, person.lastName].filter(Boolean).join(" ")}.` };
+  if ((first || last) && !nameOk) {
+    return { matches: false, blockSave: true, kind: "mismatch", summary: "This page does not match the selected patient. Choosing a different box cannot override that." };
   }
-  if (!nameOk || !mrnOk) {
-    return { matches: false, blockSave: true, summary: "This page does not match the selected patient. Choosing a different box cannot override that." };
+  if (dob && (!dobOk || dobAmbiguous)) {
+    return { matches: false, blockSave: true, kind: dobAmbiguous ? "unknown" : "mismatch", summary: dobAmbiguous ? "The date of birth on this page could be read two ways, so nothing will be saved." : "The date of birth on this page does not match the selected patient, so nothing will be saved." };
   }
-  return { matches: false, blockSave: true, summary: "The date of birth on this page does not match the selected patient, so nothing will be saved." };
+  if (mrn && !mrnOk) {
+    return { matches: false, blockSave: true, kind: "mismatch", summary: "The medical record number on this page does not match the selected patient." };
+  }
+  if (!dob) {
+    return { matches: false, blockSave: true, kind: "unknown", summary: "The name matches, but this page has no date of birth, so nothing will be saved." };
+  }
+  return { matches: true, blockSave: false, kind: "match", summary: `Name and date of birth match ${[person.firstName, person.lastName].filter(Boolean).join(" ")}.` };
 }
 
 export function pageSignature(facts: PageFact[]): string {
