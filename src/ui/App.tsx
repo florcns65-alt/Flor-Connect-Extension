@@ -126,6 +126,8 @@ export function App() {
         <FillPreview
           person={patient}
           fields={transfer.model.fields}
+          blocked={transfer.model.blocked}
+          identity={transfer.model.identity}
           host={transfer.model.host}
           pageTitle={transfer.model.pageTitle}
           frameNote={transfer.model.frameNote}
@@ -171,6 +173,7 @@ export function App() {
           person={patient}
           fields={transfer.model.fields}
           identity={transfer.model.identity}
+          blocked={transfer.model.blocked}
           host={transfer.model.host}
           pageTitle={transfer.model.pageTitle}
           onToggle={transfer.toggleSave}

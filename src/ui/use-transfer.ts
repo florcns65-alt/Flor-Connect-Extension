@@ -47,7 +47,7 @@ export type TransferModel =
   | ({ kind: "mapping"; direction: "fill" | "save"; remember: boolean; blocked: boolean; identity: string } & PageContext)
   | ({ kind: "multi"; direction: "fill" | "save"; people: Array<{ name: string; mrn: string }>; error: string } & PageContext)
   | ({ kind: "pick"; purpose: "field" | "region"; direction: "fill" | "save"; targetIndex: number; lookingFor: string; picked: FieldPick | null; returnKind: "mapping" | "preview" | "chart" } & PageContext)
-  | ({ kind: "preview" } & PageContext)
+  | ({ kind: "preview"; blocked: boolean; identity: string } & PageContext)
   | ({ kind: "conflicts" } & PageContext)
   | { kind: "result"; filled: number; skipped: string[]; site: string; undo: FillWriteResult[]; lock: TransferLock }
   | { kind: "save"; fields: SaveField[]; identity: string; blocked: boolean; lock: TransferLock; host: string; pageTitle: string; busy: boolean; error: string; facts: PageFact[]; sourceFields: MappedField[] }
@@ -120,7 +120,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       setModel({ ...context, kind: "multi", direction, people: detected.people, error: "", fields: detected.fields, facts });
       return;
     }
-    const identity = identityFor(detected.fields, person);
+    const identity = identityFor(detected.fields, person, facts);
     const stored = memory.get(workspaceId, context.lock.url);
     let fields = detected.fields;
     let layoutNote = "";
@@ -134,7 +134,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
         setModel({ kind: "no-form", message: "No form on this page" });
         return;
       }
-      setModel({ ...page, kind: "preview" });
+      setModel({ ...page, kind: "preview", blocked: identity.blockSave, identity: identity.summary });
       return;
     }
     if (detected.writable === 0) {
@@ -204,6 +204,11 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       setModel({ kind: "cant-read", message: result.ok ? "This page could not be checked." : result.message, counts: result.ok ? "" : result.counts });
       return;
     }
+    const active = await access.queryTab();
+    if (!active.ok || active.tab.id !== result.tab.id || active.tab.url !== result.tab.url) {
+      setModel({ kind: "cant-read", message: "The active tab changed while the page was being checked. Those fields were discarded.", counts: "" });
+      return;
+    }
     const tabAddress = documentAddress(result.tab.url);
     const decision = acceptScan({
       requestId: token,
@@ -240,6 +245,42 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   }
 
   async function confirmFill(fields: MappedField[], lock: TransferLock, host: string): Promise<void> {
+    if (!person || !samePatient(lock)) {
+      setModel({ kind: "cant-read", message: "The selected patient or workspace changed. Nothing was typed.", counts: "" });
+      return;
+    }
+    const binding = await access.queryTab();
+    if (!binding.ok || binding.tab.id !== lock.tabId || !locksMatch(lock, { ...lock, tabId: binding.tab.id, url: binding.tab.url })) {
+      setModel({ kind: "cant-read", message: "The active tab changed. Nothing was typed.", counts: "" });
+      return;
+    }
+    const fresh = await access.read(lock.tabId);
+    const address = documentAddress(binding.tab.url);
+    if (fresh.injectionFailed || fresh.build !== panelBuild || !address || fresh.host !== address.host || fresh.path !== address.path) {
+      setModel({ kind: "cant-read", message: "The page changed or could not be checked again. Nothing was typed.", counts: "" });
+      return;
+    }
+    const freshMapped = mapPageFacts(fresh.facts, person);
+    const currentIdentity = identityFor(freshMapped.fields, person, fresh.facts);
+    if (freshMapped.mixed || currentIdentity.blockSave) {
+      const message = freshMapped.mixed ? "This page still includes more than one person. Nothing was typed." : currentIdentity.summary;
+      setModel({ kind: "cant-read", message, counts: "Nothing was typed." });
+      return;
+    }
+    const selectedDrifted = fields.some((field) => {
+      if (!field.selected || !field.key) return false;
+      const match = freshMapped.fields.filter((item) => item.key === field.key && item.status === "matched");
+      return match.length !== 1 || match[0].pageValue !== field.pageValue || match[0].controlId !== field.controlId || match[0].controlName !== field.controlName || match[0].regionId !== field.regionId;
+    });
+    if (selectedDrifted) {
+      setModel({ kind: "cant-read", message: "The form changed after review. Nothing was typed.", counts: "" });
+      return;
+    }
+    const finalTab = await access.queryTab();
+    if (!samePatient(lock) || !finalTab.ok || finalTab.tab.id !== lock.tabId || finalTab.tab.url !== lock.url) {
+      setModel({ kind: "cant-read", message: "The patient, workspace, or active tab changed. Nothing was typed.", counts: "" });
+      return;
+    }
     const current = await access.currentTab(lock.tabId);
     if (!current || !samePatient(lock) || !locksMatch(lock, { ...lock, tabId: current.id, url: current.url })) {
       setModel({ kind: "cant-read", message: "The tab or patient changed. Nothing was typed.", counts: "" });
@@ -260,7 +301,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       setModel((current) => {
         if (!current || (current.kind !== "preview" && current.kind !== "conflicts" && current.kind !== "mapping" && current.kind !== "chart")) return current;
         const fields = current.fields.map((field, fieldIndex) => (fieldIndex === index ? { ...field, selected: !field.selected, status: field.selected ? "unmatched" as const : field.status } : field));
-        const identity = person ? identityFor(fields, person) : { summary: "", blockSave: true };
+        const identity = person ? identityFor(fields, person, current.facts) : { summary: "", blockSave: true };
         if (current.kind === "mapping" || current.kind === "chart") return { ...current, fields, blocked: identity.blockSave, identity: identity.summary };
         return { ...current, fields };
       });
@@ -277,6 +318,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
     },
     continueFill() {
       if (!model || model.kind !== "preview") return;
+      if (model.blocked) return;
       const occupied = model.fields.some((field) => field.occupied && field.status === "matched");
       if (occupied) setModel({ ...model, kind: "conflicts" });
       else void confirmFill(model.fields, model.lock, model.host);
@@ -287,7 +329,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
     },
     reviewSave() {
       if (!model || !person || (model.kind !== "chart" && model.kind !== "mapping")) return;
-      const identity = identityFor(model.fields, person);
+      const identity = identityFor(model.fields, person, model.facts);
       if (model.kind === "chart") {
         setModel({ ...model, kind: "mapping", direction: "save", remember: false, blocked: identity.blockSave, identity: identity.summary });
         return;
@@ -349,7 +391,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
           return;
         }
         const mapped = mapPageFacts(check.facts, person);
-        const identity = identityFor(mapped.fields, person);
+        const identity = identityFor(mapped.fields, person, check.facts);
         const next = { ...model, facts: check.facts, fields: mapped.fields, lock: { ...model.lock, regionId: model.picked.regionId }, blocked: identity.blockSave, identity: identity.summary };
         setModel(mapped.writable === 0 ? { ...next, kind: "chart" } : { ...next, kind: "mapping", direction: "save", remember: false });
         return;
@@ -360,8 +402,8 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
           ? { ...field, pageValue: picked.value, status: "matched" as const, selected: Boolean(picked.value), note: "", evidence: `From the label "${picked.evidenceText || picked.label}"`, regionId: picked.regionId, writable: picked.writable }
           : field,
       );
-      const identity = identityFor(fields, person);
-      if (model.returnKind === "preview") setModel({ ...model, kind: "preview", fields });
+      const identity = identityFor(fields, person, model.facts);
+      if (model.returnKind === "preview") setModel({ ...model, kind: "preview", fields, blocked: identity.blockSave, identity: identity.summary });
       else if (model.returnKind === "chart") setModel({ ...model, kind: "chart", fields, identity: identity.summary, blocked: identity.blockSave });
       else setModel({ ...model, kind: "mapping", fields, identity: identity.summary, blocked: identity.blockSave, direction: model.direction, remember: false });
     },
@@ -387,11 +429,17 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
         return;
       }
       const current = await access.currentTab(model.lock.tabId);
-      if (!current || !locksMatch(model.lock, { ...model.lock, tabId: current.id, url: current.url })) {
+      const active = await access.queryTab();
+      if (!current || !active.ok || active.tab.id !== model.lock.tabId || !locksMatch(model.lock, { ...model.lock, tabId: current.id, url: current.url })) {
         setModel({ ...model, error: "The EHR tab changed. Nothing was saved." });
         return;
       }
       const fresh = await access.read(model.lock.tabId);
+      const freshAddress = documentAddress(current.url);
+      if (fresh.injectionFailed || !freshAddress || fresh.host !== freshAddress.host || fresh.path !== freshAddress.path || fresh.build !== panelBuild) {
+        setModel({ ...model, blocked: true, identity: "The page could not be verified again. Nothing was saved.", error: "Close the panel and reopen it before trying again." });
+        return;
+      }
       const scoped = model.lock.regionId ? fresh.facts.filter((fact) => fact.regionId === model.lock.regionId) : fresh.facts;
       if (model.lock.regionId) {
         const check = confirmRegion(fresh.facts, model.lock.regionId, person);
@@ -401,6 +449,16 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
         }
       }
       const freshFields = mapPageFacts(scoped, person).fields;
+      const freshPeople = mapPageFacts(scoped, person);
+      if (freshPeople.mixed) {
+        setModel({ ...model, blocked: true, identity: "This page still includes more than one person.", error: "Nothing was saved." });
+        return;
+      }
+      const freshIdentity = identityFor(freshFields, person, scoped);
+      if (freshIdentity.blockSave) {
+        setModel({ ...model, blocked: true, identity: freshIdentity.summary, error: freshIdentity.summary });
+        return;
+      }
       const drifted = model.fields.some((field) => {
         if (!field.selected) return false;
         const again = freshFields.find((item) => item.key === field.key);
@@ -408,6 +466,11 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       });
       if (drifted) {
         setModel({ ...model, error: "The page changed after the review. Nothing was saved." });
+        return;
+      }
+      const finalTab = await access.queryTab();
+      if (!samePatient(model.lock) || !finalTab.ok || finalTab.tab.id !== model.lock.tabId || finalTab.tab.url !== model.lock.url) {
+        setModel({ ...model, blocked: true, error: "The patient, workspace, or active tab changed. Nothing was saved." });
         return;
       }
       setModel({ ...model, busy: true, error: "" });

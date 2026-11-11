@@ -94,7 +94,7 @@ function stub(person: { id: string; firstName: string; lastName: string; dateOfB
       if (message.type === "data:people" || message.type === "data:search") return ok({ people: [{ id: person.id, firstName: person.firstName, lastName: person.lastName, name: person.name, dateOfBirth: person.dateOfBirth, sex: person.sex, mrn: person.mrn, appointment: null }], total: 1, offset: 0, limit: 50 });
       if (message.type === "data:patient") return ok({ person, upcoming: [], recent: [] });
       if (message.type === "data:updatePerson") return { ok: false, error: { code: "server", message: "This test does not write to FLOR." } };
-      if (message.type === "meta:version") return ok({ version: "2.7.0" });
+      if (message.type === "meta:version") return ok({ version: "2.7.1" });
       return ok(null);
     };
     const install = () => {
@@ -125,13 +125,21 @@ async function clickText(cdp: Cdp, sessionId: string, text: string): Promise<voi
   if (!(clicked.result as { value?: boolean } | undefined)?.value) throw new Error(`Button not found: ${text}`);
 }
 
+async function buttonDisabled(cdp: Cdp, sessionId: string, text: string): Promise<boolean> {
+  const result = await cdp.send("Runtime.evaluate", {
+    expression: `(() => { const button = [...document.querySelectorAll("button")].find((item) => (item.innerText || "").includes(${JSON.stringify(text)})); return button?.disabled ?? false; })()`,
+    returnByValue: true,
+  }, sessionId);
+  return Boolean((result.result as { value?: boolean } | undefined)?.value);
+}
+
 describe.skipIf(!enabled)("installed side panel chain", () => {
   it("clicks Save in the panel, injects into the fixture tab, and previews the read", async () => {
     const extensionDir = mkdtempSync(join(tmpdir(), "flor-ext-"));
     cpSync("dist", extensionDir, { recursive: true });
     const manifestPath = join(extensionDir, "manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { version: string; key?: string; host_permissions?: string[]; optional_host_permissions?: string[] };
-    expect(manifest.version).toBe("2.7.0");
+    expect(manifest.version).toBe("2.7.1");
     expect(manifest.key).toBeTruthy();
     manifest.host_permissions = [...(manifest.host_permissions ?? []), "http://127.0.0.1/*"];
     writeFileSync(manifestPath, JSON.stringify(manifest));
@@ -171,6 +179,19 @@ describe.skipIf(!enabled)("installed side panel chain", () => {
       expect(text).toContain("Save this page to FLOR");
       await cdp.send("Target.activateTarget", { targetId: openmrs.targetId });
       await new Promise((resolve) => setTimeout(resolve, 400));
+      await clickText(cdp, panelSession, "Fill this page");
+      let fillText = "";
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        fillText = await panelText(cdp, panelSession);
+        if (fillText.includes("Fill selected fields") || fillText.includes("We can't read")) break;
+      }
+      expect(fillText).toContain("does not match the selected patient");
+      expect(await buttonDisabled(cdp, panelSession, "Fill selected fields")).toBe(true);
+      await clickText(cdp, panelSession, "Test Synthetic");
+      for (let attempt = 0; attempt < 40 && !(await panelText(cdp, panelSession)).includes("Save this page to FLOR"); attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
       await clickText(cdp, panelSession, "Save this page to FLOR");
       for (let attempt = 0; attempt < 40 && !text.includes("Sánchez") && !text.includes("John") && !text.includes("We can't read"); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 250));

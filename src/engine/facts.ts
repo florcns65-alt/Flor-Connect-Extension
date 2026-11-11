@@ -109,12 +109,7 @@ function samePersonName(left: string, right: string): boolean {
   const a = nameTokens(left);
   const b = nameTokens(right);
   if (a.length === 0 || b.length === 0) return false;
-  const shrink = (tokens: string[]) => {
-    const copy = [...tokens];
-    while (copy.length >= 2 && copy[copy.length - 1] === copy[copy.length - 2]) copy.pop();
-    return copy.join(" ");
-  };
-  return shrink(a) === shrink(b);
+  return a.join(" ") === b.join(" ");
 }
 
 function usableRecordId(value: string): string {
@@ -180,7 +175,7 @@ export function confirmRegion(facts: PageFact[], regionId: string, person: Perso
   if (detected.mixed || detected.people.length !== 1) {
     return { ok: false, reason: "That section still includes more than one person.", facts: [] };
   }
-  const identity = identityFor(mapPageFacts(subset, person).fields, person);
+  const identity = identityFor(mapPageFacts(subset, person).fields, person, subset);
   if (identity.blockSave || !identity.matches) {
     return { ok: false, reason: "That section does not match the selected patient.", facts: [] };
   }
@@ -213,6 +208,7 @@ export function mapPageFacts(facts: PageFact[], person: PersonDetail): { fields:
     const classified = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
     if (!classified) continue;
     if ("ambiguous" in classified) {
+      if (/\b(?:date of birth|birth date|birthdate|dob)\b/i.test(`${fact.label} ${fact.controlName} ${fact.controlId}`) && /\b(?:month|day|year)\b/i.test(`${fact.label} ${fact.controlName} ${fact.controlId}`)) used.add("date_of_birth");
       push({
         control: null,
         key: null,
@@ -294,12 +290,14 @@ function fieldFrom(fact: PageFact, key: DemographicKey, pageValue: string, florV
   };
 }
 
-export function identityFor(fields: MappedField[], person: PersonDetail): { matches: boolean; blockSave: boolean; summary: string; kind: "match" | "mismatch" | "unknown" } {
+export function identityFor(fields: MappedField[], person: PersonDetail, facts: PageFact[] = []): { matches: boolean; blockSave: boolean; summary: string; kind: "match" | "mismatch" | "unknown" } {
   const read = (key: DemographicKey) => fields.find((field) => field.key === key && field.status === "matched")?.pageValue ?? "";
   const first = read("first_name");
   const last = read("last_name");
   const dob = read("date_of_birth");
   const mrn = usableRecordId(read("mrn"));
+  const fullName = facts.find((fact) => /^(name|patient|patient name)$/i.test(fact.label))?.value ?? "";
+  const selectedName = [person.firstName, person.lastName].filter(Boolean).join(" ");
   const dobAmbiguous = !dob && fields.some((field) => field.key === "date_of_birth" && field.status === "ambiguous");
   if (!first && !last && !dob) {
     return { matches: false, blockSave: true, kind: "unknown", summary: "This page does not show a name or date of birth, so it cannot be checked against the selected patient." };
@@ -309,6 +307,9 @@ export function identityFor(fields: MappedField[], person: PersonDetail): { matc
   const mrnOk = !mrn || sameText(mrn, person.mrn ?? "");
   if ((first || last) && !nameOk) {
     return { matches: false, blockSave: true, kind: "mismatch", summary: "This page does not match the selected patient. Choosing a different box cannot override that." };
+  }
+  if (fullName && !samePersonName(fullName, selectedName)) {
+    return { matches: false, blockSave: true, kind: "mismatch", summary: "The patient name on this page does not match the selected patient. Choosing a different box cannot override that." };
   }
   if (dob && (!dobOk || dobAmbiguous)) {
     return { matches: false, blockSave: true, kind: dobAmbiguous ? "unknown" : "mismatch", summary: dobAmbiguous ? "The date of birth on this page could be read two ways, so nothing will be saved." : "The date of birth on this page does not match the selected patient, so nothing will be saved." };

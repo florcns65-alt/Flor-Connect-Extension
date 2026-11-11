@@ -75,6 +75,8 @@ export function TransferChrome({
 export function FillPreview({
   person,
   fields,
+  blocked,
+  identity,
   host,
   pageTitle,
   frameNote,
@@ -87,6 +89,8 @@ export function FillPreview({
 }: {
   person: PersonDetail;
   fields: MappedField[];
+  blocked: boolean;
+  identity: string;
   host: string;
   pageTitle: string;
   frameNote: string;
@@ -107,7 +111,7 @@ export function FillPreview({
       workspaceName={workspaceName}
       initials={initials}
       action={
-        <button type="button" className="btn-primary" onClick={onContinue}>
+        <button type="button" className="btn-primary" onClick={onContinue} disabled={blocked}>
           Fill selected fields
         </button>
       }
@@ -115,6 +119,7 @@ export function FillPreview({
     >
       <PatientChip person={person} host={host} pageTitle={pageTitle} />
       <p className="section-heading">{matched} of {fields.length} fields match</p>
+      {blocked ? <p className="identity-flag bad">{identity}</p> : null}
       {frameNote ? <p className="body-copy">{frameNote}</p> : null}
       <div className="card">
         {fields.map((field, index) => (
@@ -256,6 +261,7 @@ export function SavePreview({
   person,
   fields,
   identity,
+  blocked,
   host,
   pageTitle,
   onToggle,
@@ -269,6 +275,7 @@ export function SavePreview({
   person: PersonDetail;
   fields: SaveField[];
   identity: string;
+  blocked: boolean;
   host: string;
   pageTitle: string;
   onToggle: (index: number) => void;
@@ -279,7 +286,6 @@ export function SavePreview({
   workspaceName: string | null;
   initials: string;
 }) {
-  const blocked = identity.startsWith("This page");
   return (
     <TransferChrome
       personName={personDisplayName(person)}

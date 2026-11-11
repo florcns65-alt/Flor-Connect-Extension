@@ -58,6 +58,26 @@ describe("OpenEMR-like identity", () => {
     expect(identityFor(mapped.fields, phil).kind).toBe("match");
   });
 
+  it("blocks a full-page name mismatch even when the DOB field is ambiguous or selected manually", () => {
+    const read = readDocument(mount(`<header><h1>John Sánchez</h1><p>DOB: 1972-02-09</p></header><form><label for="dob">Date of Birth</label><input id="dob" value="1972-02-09"></form>`));
+    const mapped = mapPageFacts(read.facts, phil);
+    expect(identityFor(mapped.fields, phil, read.facts).kind).toBe("mismatch");
+    expect(identityFor(mapped.fields, phil, read.facts).blockSave).toBe(true);
+  });
+
+  it("treats DOB month/day/year controls as ambiguous instead of writable full dates", () => {
+    const read = readDocument(mount(`<form>
+      <label for="birth-month">Date of Birth Month</label><input id="birth-month" value="July">
+      <label for="birth-day">Date of Birth Day</label><input id="birth-day" value="18">
+      <label for="birth-year">Date of Birth Year</label><input id="birth-year" value="1980">
+    </form>`));
+    const mapped = mapPageFacts(read.facts, { ...phil, firstName: "John", lastName: "Sánchez", dateOfBirth: "1980-07-18" });
+    const components = mapped.fields.filter((field) => field.status === "ambiguous");
+    expect(components).toHaveLength(3);
+    expect(components.every((field) => !field.selected && field.key === null)).toBe(true);
+    expect(mapped.fields.some((field) => field.key === "date_of_birth")).toBe(false);
+  });
+
   it("keeps two different people, and homonyms with different dates, separate", () => {
     const two = readDocument(mount(`
       <table>

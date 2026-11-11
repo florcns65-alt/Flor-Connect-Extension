@@ -55,7 +55,7 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
       host_permissions?: string[];
       optional_host_permissions?: string[];
     };
-      expect(manifest.version).toBe("2.7.0");
+      expect(manifest.version).toBe("2.7.1");
     expect(manifest.host_permissions?.some((item) => item.includes("127.0.0.1"))).toBe(false);
     expect(manifest.optional_host_permissions).toEqual(expect.arrayContaining(["https://*/*", "http://*/*"]));
     const server = createServer((_request, response) => {
@@ -92,7 +92,7 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
             if (message.type === "data:appointments") return ok([]);
             if (message.type === "data:people" || message.type === "data:search") return ok({ people: [{ id: person.id, firstName: person.firstName, lastName: person.lastName, name: person.name, dateOfBirth: person.dateOfBirth, sex: null, mrn: person.mrn, appointment: null }], total: 1, offset: 0, limit: 50 });
             if (message.type === "data:patient") return ok({ person, upcoming: [], recent: [] });
-            if (message.type === "meta:version") return ok({ version: "2.7.0" });
+            if (message.type === "meta:version") return ok({ version: "2.7.1" });
             if (message.type === "data:updatePerson") return { ok: false, error: { code: "server", message: "no write" } };
             return ok(null);
           };
@@ -107,12 +107,12 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
       }, session);
       await cdp.send("Page.navigate", { url: `chrome-extension://${extensionId}/src/ui/sidepanel.html` }, session);
       let text = "";
-      for (let attempt = 0; attempt < 30 && !text.includes("Panel 2.7.0"); attempt += 1) {
+      for (let attempt = 0; attempt < 30 && !text.includes("Panel 2.7.1"); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 200));
         text = String(((await cdp.send("Runtime.evaluate", { expression: "document.body.innerText", returnByValue: true }, session)).result as { value?: string } | undefined)?.value ?? "");
       }
-      expect(text).toContain("Panel 2.7.0");
-      expect(text).toContain("Installed 2.7.0");
+      expect(text).toContain("Panel 2.7.1");
+      expect(text).toContain("Installed 2.7.1");
       await cdp.send("Target.activateTarget", { targetId: siteTarget!.id });
       const probe = await cdp.send("Runtime.evaluate", {
         expression: `chrome.windows.getLastFocused({ windowTypes: ["normal"] }).then(async (win) => { const tabs = await chrome.tabs.query({ active: true, windowId: win.id }); const tab = tabs[0]; return { permissions: chrome.runtime.getManifest().permissions, hasId: Boolean(tab && tab.id), scheme: tab && tab.url ? tab.url.split(":")[0] : "missing" }; })`,
@@ -140,7 +140,7 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
         text = String(((await cdp.send("Runtime.evaluate", { expression: "document.body.innerText", returnByValue: true }, session)).result as { value?: string } | undefined)?.value ?? "");
       }
-      expect(text).toContain("Panel 2.7.0");
+      expect(text).toContain("Panel 2.7.1");
       await cdp.send("Runtime.evaluate", {
         expression: `(() => { const button = [...document.querySelectorAll("button")].find((item) => (item.innerText || "").includes("Save this page to FLOR")); button.click(); })()`,
         returnByValue: true,

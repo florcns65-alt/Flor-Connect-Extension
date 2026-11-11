@@ -122,6 +122,8 @@ function scoreKey(hint: string, key: DemographicKey): number {
 export function classifyHint(hint: string): { key: DemographicKey } | { ambiguous: true } | null {
   let winner: { key: DemographicKey; score: number } | null = null;
   let runner = 0;
+  const normalized = tokens(hint);
+  if (/\b(?:date of birth|birth date|birthdate|dob)\b/.test(normalized) && /\b(?:month|day|year)\b/.test(normalized)) return { ambiguous: true };
   for (const key of DEMOGRAPHIC_KEYS) {
     const score = scoreKey(hint, key);
     if (!winner || score > winner.score) {
