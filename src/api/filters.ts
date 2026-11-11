@@ -38,7 +38,7 @@ export interface SelectQuery {
 
 /** Escape the PostgREST `or` reserved characters the brief names, plus backslash. */
 export function escapePostgrestOrValue(raw: string): string {
-  return raw.replace(/[,()%\\]/g, (character) => `\\${character}`);
+  return raw.replace(/[,()%\\*]/g, (character) => `\\${character}`);
 }
 
 export function normalizeSearchQuery(raw: string): string | null {
@@ -88,7 +88,7 @@ export function birthdaySearchClauses(query: string): string[] {
     const exact = isoDate(iso[1], iso[2], iso[3]);
     return exact ? [`date_of_birth.eq.${exact}`] : [];
   }
-  if (/^\d{4}$/.test(query)) return [`date_of_birth.ilike.${query}-%`];
+  if (/^\d{4}$/.test(query)) return [`date_of_birth.ilike.${query}-*`];
   const dayMonthYear = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(query);
   if (dayMonthYear) {
     const month = MONTH_NUMBERS[dayMonthYear[2].toLowerCase()];
@@ -97,7 +97,7 @@ export function birthdaySearchClauses(query: string): string[] {
   }
   const monthYear = /^([A-Za-z]+)\s+(\d{4})$/.exec(query);
   if (monthYear && MONTH_NUMBERS[monthYear[1].toLowerCase()]) {
-    return [`date_of_birth.ilike.${monthYear[2]}-${MONTH_NUMBERS[monthYear[1].toLowerCase()]}-%`];
+    return [`date_of_birth.ilike.${monthYear[2]}-${MONTH_NUMBERS[monthYear[1].toLowerCase()]}-*`];
   }
   const slash = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(query);
   if (!slash) return [];
@@ -119,9 +119,10 @@ export function birthdaySearchClauses(query: string): string[] {
 export function peopleSearchExpression(query: string): string {
   const escaped = escapePostgrestOrValue(query);
   const clauses = [
-    `first_name.ilike.%${escaped}%`,
-    `last_name.ilike.%${escaped}%`,
-    `mrn.ilike.%${escaped}%`,
+    `first_name.ilike.*${escaped}*`,
+    `last_name.ilike.*${escaped}*`,
+    `name.ilike.*${escaped}*`,
+    `mrn.ilike.*${escaped}*`,
   ];
   const words = query
     .split(/\s+/)
@@ -130,8 +131,8 @@ export function peopleSearchExpression(query: string): string {
   if (words.length === 2) {
     const first = escapePostgrestOrValue(words[0]);
     const second = escapePostgrestOrValue(words[1]);
-    clauses.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${second}%)`);
-    clauses.push(`and(first_name.ilike.%${second}%,last_name.ilike.%${first}%)`);
+    clauses.push(`and(first_name.ilike.*${first}*,last_name.ilike.*${second}*)`);
+    clauses.push(`and(first_name.ilike.*${second}*,last_name.ilike.*${first}*)`);
   }
   clauses.push(...birthdaySearchClauses(query));
   return clauses.join(",");

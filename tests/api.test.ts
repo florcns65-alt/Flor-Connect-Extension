@@ -120,8 +120,9 @@ describe("FlorApi", () => {
     const fake = client(() => []);
     const api = createSupabaseFlorApi(fake.client);
     await api.searchPeople(WS, "Ann, Jr");
-    expect(fake.traces[0].join("\n")).toContain("first_name.ilike.%Ann\\, Jr%");
-    expect(fake.traces[0].join("\n")).toContain("mrn.ilike.%Ann\\, Jr%");
+    expect(fake.traces[0].join("\n")).toContain("first_name.ilike.*Ann\\, Jr*");
+    expect(fake.traces[0].join("\n")).toContain("name.ilike.*Ann\\, Jr*");
+    expect(fake.traces[0].join("\n")).toContain("mrn.ilike.*Ann\\, Jr*");
     expect(fake.traces[0]).toContain("range:0-49");
     expect(fake.traces[0]).toContain("order:last_name");
   });

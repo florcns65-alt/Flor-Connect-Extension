@@ -94,6 +94,7 @@ function stub(person: { id: string; firstName: string; lastName: string; dateOfB
       if (message.type === "data:people" || message.type === "data:search") return ok({ people: [{ id: person.id, firstName: person.firstName, lastName: person.lastName, name: person.name, dateOfBirth: person.dateOfBirth, sex: person.sex, mrn: person.mrn, appointment: null }], total: 1, offset: 0, limit: 50 });
       if (message.type === "data:patient") return ok({ person, upcoming: [], recent: [] });
       if (message.type === "data:updatePerson") return { ok: false, error: { code: "server", message: "This test does not write to FLOR." } };
+      if (message.type === "meta:version") return ok({ version: "2.5.0" });
       return ok(null);
     };
     const install = () => {
@@ -130,7 +131,7 @@ describe.skipIf(!enabled)("installed side panel chain", () => {
     cpSync("dist", extensionDir, { recursive: true });
     const manifestPath = join(extensionDir, "manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { version: string; key?: string; host_permissions?: string[]; optional_host_permissions?: string[] };
-    expect(manifest.version).toBe("2.4.0");
+    expect(manifest.version).toBe("2.5.0");
     expect(manifest.key).toBeTruthy();
     manifest.host_permissions = [...(manifest.host_permissions ?? []), "http://127.0.0.1/*"];
     writeFileSync(manifestPath, JSON.stringify(manifest));
@@ -143,6 +144,7 @@ describe.skipIf(!enabled)("installed side panel chain", () => {
     try {
       const cdp = await connectBrowser(9334);
       const openemr = await cdp.send("Target.createTarget", { url: site.url("/openemr") });
+      const openmrs = await cdp.send("Target.createTarget", { url: site.url("/openmrs") });
       const panel = await cdp.send("Target.createTarget", { url: "about:blank" });
       const panelSession = String((await cdp.send("Target.attachToTarget", { targetId: panel.targetId, flatten: true })).sessionId);
       await cdp.send("Page.enable", {}, panelSession);
@@ -167,36 +169,30 @@ describe.skipIf(!enabled)("installed side panel chain", () => {
         text = await panelText(cdp, panelSession);
       }
       expect(text).toContain("Save this page to FLOR");
-      await cdp.send("Target.activateTarget", { targetId: openemr.targetId });
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await cdp.send("Target.activateTarget", { targetId: openmrs.targetId });
+      await new Promise((resolve) => setTimeout(resolve, 400));
       await clickText(cdp, panelSession, "Save this page to FLOR");
-      for (let attempt = 0; attempt < 40 && !text.includes("does not match") && !text.includes("We can't read"); attempt += 1) {
+      for (let attempt = 0; attempt < 40 && !text.includes("Sánchez") && !text.includes("John") && !text.includes("We can't read"); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         text = await panelText(cdp, panelSession);
       }
       expect(text).not.toContain("Belford Belford");
       expect(text).not.toContain("More than one person");
-      expect(text).not.toContain("Example");
-      expect(text).toContain("does not match");
-      const chartSession = String((await cdp.send("Target.attachToTarget", { targetId: openemr.targetId, flatten: true })).sessionId);
-      await cdp.send("Page.enable", {}, chartSession);
-      await cdp.send("Page.navigate", { url: site.url("/openmrs") }, chartSession);
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      await clickText(cdp, panelSession, "Test Synthetic").catch(async () => {
-        await clickText(cdp, panelSession, "Back");
-      });
+      expect(text).toMatch(/Sánchez|John/);
+      await cdp.send("Target.activateTarget", { targetId: openemr.targetId });
       for (let attempt = 0; attempt < 20 && !(await panelText(cdp, panelSession)).includes("Save this page to FLOR"); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
       await clickText(cdp, panelSession, "Save this page to FLOR");
-      let formText = "";
+      let philText = "";
       for (let attempt = 0; attempt < 40; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 250));
-        formText = await panelText(cdp, panelSession);
-        if (formText.includes("Sánchez") || formText.includes("John")) break;
+        philText = await panelText(cdp, panelSession);
+        if (philText.includes("Belford") || philText.includes("We can't read")) break;
       }
-      expect(formText).not.toContain("We can't read this page");
-      expect(formText).toMatch(/Sánchez|John/);
+      expect(philText).not.toContain("Sánchez");
+      expect(philText).not.toContain("Belford Belford");
+      expect(philText).toContain("Belford");
     } finally {
       chrome.kill();
       site.close();

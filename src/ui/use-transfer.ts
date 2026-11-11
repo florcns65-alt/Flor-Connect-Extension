@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   applyLayout,
   confirmRegion,
@@ -26,7 +26,8 @@ import { PersonChartSchema } from "../shared/messages";
 import type { PersonDetail } from "../shared/types";
 import { request } from "./bridge";
 import { useFlorStore } from "./store";
-import { cachedActiveTab, chromeFormAccess, readActivePage, watchActiveTab } from "./transfer-tab";
+import { acceptScan, documentAddress, provenanceLine } from "./tab-bind";
+import { chromeFormAccess, readActivePage, watchActiveTab } from "./transfer-tab";
 
 type PageContext = {
   facts: PageFact[];
@@ -68,9 +69,28 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   const [model, setModel] = useState<TransferModel | null>(null);
   const access = useMemo(() => chromeFormAccess(), []);
   const memory = sessionLayoutsStore();
+  const requestId = useRef(0);
+  const [workerBuild, setWorkerBuild] = useState("");
+  const panelBuild = __FLOR_VERSION__;
+  const installedBuild = typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : panelBuild;
+  const provenance = provenanceLine({ panel: panelBuild, installed: installedBuild, worker: workerBuild, reader: "" });
   useEffect(() => {
-    watchActiveTab();
+    let live = true;
+    void chrome.runtime.sendMessage({ type: "meta:version" }).then((response: { ok?: boolean; data?: { version?: string } }) => {
+      if (live && response?.ok && response.data?.version) setWorkerBuild(response.data.version);
+    }).catch(() => undefined);
+    return () => {
+      live = false;
+    };
   }, []);
+  useEffect(() => watchActiveTab(() => {
+    requestId.current += 1;
+    setModel(null);
+  }), []);
+  useEffect(() => {
+    requestId.current += 1;
+    setModel(null);
+  }, [person?.id, workspaceId]);
   const pickTabId = model?.kind === "pick" ? model.lock.tabId : 0;
 
   useEffect(() => {
@@ -123,20 +143,16 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   }
 
   function begin(direction: "fill" | "save"): void {
-    const tab = cachedActiveTab();
-    if (!tab) {
-      void scan(direction);
+    if (provenance.stale) {
+      setModel({ kind: "cant-read", message: provenance.text, counts: "" });
       return;
     }
-    const pattern = `${new URL(tab.url).origin}/*`;
-    void chrome.permissions.request({ origins: [pattern] }).then(
-      () => scan(direction),
-      () => scan(direction),
-    );
+    void scan(direction);
   }
 
   async function scan(direction: "fill" | "save"): Promise<void> {
     if (!person || !workspaceId) return;
+    const token = ++requestId.current;
     setModel({ kind: "scanning" });
     const result = await readActivePage({
       queryTab: access.queryTab,
@@ -144,8 +160,26 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       requestPermission: access.requestPermission,
       read: access.read,
     });
+    if (token !== requestId.current) return;
     if (!result.ok || !person) {
       setModel({ kind: "cant-read", message: result.ok ? "This page could not be checked." : result.message, counts: result.ok ? "" : result.counts });
+      return;
+    }
+    const tabAddress = documentAddress(result.tab.url);
+    const decision = acceptScan({
+      requestId: token,
+      currentId: requestId.current,
+      tabId: result.tab.id,
+      currentTabId: result.tab.id,
+      tabHost: tabAddress?.host ?? "",
+      tabPath: tabAddress?.path ?? "",
+      documentHost: result.host,
+      documentPath: result.path,
+      readerBuild: result.build,
+      panelBuild,
+    });
+    if (decision === "stale-reader") {
+      setModel({ kind: "cant-read", message: `The reader that ran is ${result.build || "unknown"} but this panel is ${panelBuild}. Close the side panel and open it again. The fields were discarded.`, counts: "" });
       return;
     }
     const page = readablePageLabel(result.tab.url, result.tab.title);
@@ -156,7 +190,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       lock,
       host: page.host,
       pageTitle: page.title,
-      frameNote: notesFor(result.frameErrors, result.closedControls),
+      frameNote: `Read ${page.host}. Reader ${result.build || "unknown"}. ${notesFor(result.frameErrors, result.closedControls)}`.trim(),
       layoutNote: "",
     };
     if (result.facts.length === 0) {

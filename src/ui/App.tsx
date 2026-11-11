@@ -114,7 +114,7 @@ export function App() {
     }
     if (transfer.model?.kind === "multi" && patient) {
       const others = transfer.model.people.filter((item) => !item.name.toLowerCase().includes((patient.lastName ?? "").toLowerCase()));
-      return <MultiPerson person={patient} others={others.length ? others : transfer.model.people} warning={transfer.model.error} onChoose={transfer.isolatePatient} onCancel={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
+      return <MultiPerson person={patient} others={others.length ? others : transfer.model.people} warning={transfer.model.error} detail={`${transfer.model.host} ${transfer.model.frameNote}`.trim()} onChoose={transfer.isolatePatient} onCancel={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
     }
     if (transfer.model?.kind === "no-form") {
       return (

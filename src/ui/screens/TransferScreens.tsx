@@ -416,13 +416,14 @@ export function CantRead({ personName, message, counts, onRetry, onBack, workspa
 }
 
 export function MultiPerson({
-  person, others, warning, onChoose, onCancel, workspaceName, initials,
+  person, others, warning, detail, onChoose, onCancel, workspaceName, initials,
 }: {
-  person: PersonDetail; others: Array<{ name: string; mrn: string }>; warning: string; onChoose: () => void; onCancel: () => void; workspaceName: string | null; initials: string;
+  person: PersonDetail; others: Array<{ name: string; mrn: string }>; warning: string; detail?: string; onChoose: () => void; onCancel: () => void; workspaceName: string | null; initials: string;
 }) {
   return (
     <TransferChrome personName={personDisplayName(person)} title="More than one person" lede="We won't save until it's clear who this is." onBack={onCancel} workspaceName={workspaceName} initials={initials} action={<><button type="button" className="btn-primary" onClick={onChoose}>This is {personDisplayName(person)}</button><button type="button" className="text-button" onClick={onCancel}>Cancel</button></>}>
       <p className="identity-flag warn">{warning || "Two names were found. Mixing people from a list would be unsafe."}</p>
+      {detail ? <p className="person-meta">{detail}</p> : null}
       <div className="card person-choice">
         <div className="identity"><span className="avatar tone-a">{personInitials(personDisplayName(person))}</span><div><strong>{personDisplayName(person)}</strong><p className="person-meta">{[formatDob(person.dateOfBirth), person.sex, person.mrn ? `MRN ${person.mrn}` : ""].filter(Boolean).join(" · ")}</p></div></div>
         <p className="person-meta">Selected in FLOR</p>

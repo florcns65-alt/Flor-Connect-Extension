@@ -104,7 +104,7 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         __FLOR_CONFIG__: JSON.stringify(testConfig),
-        __FLOR_VERSION__: JSON.stringify("2.4.0"),
+        __FLOR_VERSION__: JSON.stringify("2.5.0"),
       },
       test: {
         environment: "jsdom",

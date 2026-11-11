@@ -126,6 +126,7 @@ export const PersonChartSchema = z
 
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("auth:getState") }).strict(),
+  z.object({ type: z.literal("meta:version") }).strict(),
   z.object({ type: z.literal("auth:signIn") }).strict(),
   z.object({ type: z.literal("auth:signOut") }).strict(),
   z.object({ type: z.literal("flor:open") }).strict(),

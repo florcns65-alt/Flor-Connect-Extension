@@ -46,6 +46,8 @@ export async function handleMessage(ctx: WorkerContext, raw: unknown): Promise<E
     switch (parsed.data.type) {
       case "auth:getState":
         return ok(ctx.getAuth());
+      case "meta:version":
+        return ok({ version: __FLOR_VERSION__ });
       case "auth:signIn":
         return ok(await ctx.signIn());
       case "auth:signOut":

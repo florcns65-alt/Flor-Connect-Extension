@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { detectPeople, identityFor, mapPageFacts } from "../src/engine/facts";
+import { peopleSearchExpression } from "../src/api/filters";
 import { readDocument } from "../src/engine/read";
+import { acceptScan, bindFocusedHttpTab } from "../src/ui/tab-bind";
 import { readActivePage } from "../src/ui/transfer-tab";
 import type { PersonDetail } from "../src/shared/types";
 
@@ -109,18 +111,80 @@ describe("OpenMRS-like pages", () => {
   });
 });
 
+describe("which tab is read", () => {
+  it("uses only the focused window and drops a stale or foreign document", () => {
+    const john = { id: 2, url: "https://o2.openmrs.org/openmrs/patient.page", title: "John" };
+    const phil = { id: 1, url: "https://demo.openemr.io/openemr/interface/patient_file/summary/demographics.php", title: "Phil" };
+    const bound = bindFocusedHttpTab([
+      { id: 10, focused: false, activeTab: phil },
+      { id: 11, focused: true, activeTab: john },
+    ]);
+    expect(bound.ok).toBe(true);
+    if (bound.ok) expect(bound.tab.id).toBe(2);
+    const hidden = bindFocusedHttpTab([
+      { id: 10, focused: true, activeTab: { id: 9, url: "chrome://newtab/", title: "" } },
+      { id: 11, focused: false, activeTab: phil },
+    ]);
+    expect(hidden.ok).toBe(false);
+    expect(acceptScan({
+      requestId: 1,
+      currentId: 2,
+      tabId: 2,
+      currentTabId: 2,
+      tabHost: "o2.openmrs.org",
+      tabPath: "/openmrs/patient.page",
+      documentHost: "o2.openmrs.org",
+      documentPath: "/openmrs/patient.page",
+      readerBuild: "2.5.0",
+      panelBuild: "2.5.0",
+    })).toBe("stale-request");
+    expect(acceptScan({
+      requestId: 4,
+      currentId: 4,
+      tabId: 2,
+      currentTabId: 2,
+      tabHost: "o2.openmrs.org",
+      tabPath: "/openmrs/patient.page",
+      documentHost: "demo.openemr.io",
+      documentPath: "/openemr/interface/patient_file/summary/demographics.php",
+      readerBuild: "2.5.0",
+      panelBuild: "2.5.0",
+    })).toBe("wrong-document");
+    expect(acceptScan({
+      requestId: 4,
+      currentId: 4,
+      tabId: 2,
+      currentTabId: 2,
+      tabHost: "o2.openmrs.org",
+      tabPath: "/openmrs/patient.page",
+      documentHost: "o2.openmrs.org",
+      documentPath: "/openmrs/patient.page",
+      readerBuild: "2.4.0",
+      panelBuild: "2.5.0",
+    })).toBe("stale-reader");
+  });
+
+  it("searches the displayed name with a real substring wildcard", () => {
+    const expression = peopleSearchExpression("Synthetic");
+    expect(expression).toContain("name.ilike.*Synthetic*");
+    expect(expression).toContain("first_name.ilike.*Synthetic*");
+    expect(expression).not.toContain("ilike.%Synthetic%");
+  });
+});
+
 describe("read failures stay specific", () => {
   it("reports permission, injection, frames, and unlabeled boxes separately", async () => {
     const tab = { id: 3, url: "https://o2.openmrs.org/openmrs/patient.page", title: "Chart" };
-    const base = { queryTab: async () => tab, hasPermission: async () => true, requestPermission: async () => true };
-    const denied = await readActivePage({ ...base, hasPermission: async () => false, requestPermission: async () => false, read: async () => ({ facts: [], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: false }) });
+    const base = { queryTab: async () => ({ ok: true as const, tab, windowId: 1, webTabs: 1, windows: 1 }), hasPermission: async () => true, requestPermission: async () => true };
+    const read = { host: "o2.openmrs.org", path: "/openmrs/patient.page", build: "2.5.0" };
+    const denied = await readActivePage({ ...base, hasPermission: async () => false, requestPermission: async () => false, read: async () => ({ facts: [], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: false, ...read }) });
     expect(denied.ok).toBe(false);
     if (!denied.ok) expect(denied.reason).toBe("permission");
-    const injected = await readActivePage({ ...base, read: async () => ({ facts: [], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: true }) });
+    const injected = await readActivePage({ ...base, read: async () => ({ facts: [], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: true, ...read }) });
     if (!injected.ok) expect(injected.reason).toBe("injection");
-    const framed = await readActivePage({ ...base, read: async () => ({ facts: [], frameErrors: 2, closedControls: 0, unlabeledControls: 0, injectionFailed: false }) });
+    const framed = await readActivePage({ ...base, read: async () => ({ facts: [], frameErrors: 2, closedControls: 0, unlabeledControls: 0, injectionFailed: false, ...read }) });
     if (!framed.ok) expect(framed.reason).toBe("frames");
-    const unlabeled = await readActivePage({ ...base, read: async () => ({ facts: [], frameErrors: 0, closedControls: 1, unlabeledControls: 4, injectionFailed: false }) });
+    const unlabeled = await readActivePage({ ...base, read: async () => ({ facts: [], frameErrors: 0, closedControls: 1, unlabeledControls: 4, injectionFailed: false, ...read }) });
     if (!unlabeled.ok) {
       expect(unlabeled.reason).toBe("unlabeled");
       expect(unlabeled.counts).toContain("4 unlabeled");

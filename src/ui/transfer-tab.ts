@@ -1,5 +1,6 @@
 import { fillDocument, scanDocument, type FillInstruction, type FillWriteResult, type ScannedControl } from "../engine/page";
 import { cancelFieldPicker, installFieldPicker, readDocument, takeFieldPick, type FieldPick, type PageFact } from "../engine/read";
+import { bindFocusedHttpTab, documentAddress, type TabBinding } from "./tab-bind";
 
 export interface ActiveTab {
   id: number;
@@ -37,16 +38,23 @@ export async function readActiveForm(deps: {
 }
 
 export async function readActivePage(deps: {
-  queryTab: () => Promise<ActiveTab | null>;
   hasPermission: (originPattern: string) => Promise<boolean>;
   requestPermission: (originPattern: string) => Promise<boolean>;
-  read: (tabId: number) => Promise<{ facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number; injectionFailed: boolean }>;
+  queryTab: () => Promise<TabBinding>;
+  read: (tabId: number) => Promise<{ facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number; injectionFailed: boolean; host: string; path: string; build: string }>;
 }): Promise<
-  | { ok: true; tab: ActiveTab; facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number }
-  | { ok: false; reason: "no-tab" | "unsupported" | "permission" | "injection" | "frames" | "unlabeled" | "empty"; message: string; counts: string }
+  | { ok: true; tab: ActiveTab; facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number; host: string; path: string; build: string; webTabs: number; windows: number }
+  | { ok: false; reason: "no-tab" | "unsupported" | "permission" | "injection" | "frames" | "unlabeled" | "empty" | "wrong-document" | "stale-reader"; message: string; counts: string }
 > {
-  const tab = await deps.queryTab();
-  if (!tab?.id || !tab.url) return { ok: false, reason: "no-tab", message: "The EHR tab was not the active tab. Open that tab, then try again.", counts: "" };
+  const binding = await deps.queryTab();
+  if (!binding.ok) {
+    const counts = `${binding.windows} normal windows, ${binding.webTabs} with a web tab in front.`;
+    const message = binding.reason === "focused-not-web"
+      ? "The focused window's active tab is not a web page. Another window's tab was not read."
+      : "No normal browser window was focused, so no page was read.";
+    return { ok: false, reason: "no-tab", message, counts };
+  }
+  const tab = binding.tab;
   let parsed: URL;
   try {
     parsed = new URL(tab.url);
@@ -60,51 +68,51 @@ export async function readActivePage(deps: {
   const allowed = (await deps.hasPermission(pattern)) || (await deps.requestPermission(pattern));
   if (!allowed) return { ok: false, reason: "permission", message: "Permission for this site was not granted. Try again and allow it. Nothing was read.", counts: "" };
   const read = await deps.read(tab.id);
-  const counts = `${read.facts.length} labeled fields, ${read.unlabeledControls} unlabeled boxes, ${read.closedControls} closed boxes, ${read.frameErrors} unreadable frames.`;
+  const counts = `${read.facts.length} labeled fields, ${read.unlabeledControls} unlabeled boxes, ${read.closedControls} closed boxes, ${read.frameErrors} unreadable frames. Reader ${read.build || "unknown"}. Windows ${binding.windows}. Web tabs ${binding.webTabs}.`;
   if (read.injectionFailed) return { ok: false, reason: "injection", message: "The reader could not run in this tab. Nothing was typed or saved.", counts };
+  const tabAddress = documentAddress(tab.url);
+  if (read.host && tabAddress && read.host !== tabAddress.host) {
+    return { ok: false, reason: "wrong-document", message: "The document that answered is not the active tab. Those fields were discarded.", counts: `${counts} Active host ${tabAddress.host}. Document host ${read.host}.` };
+  }
+  if (read.path && tabAddress && read.path !== tabAddress.path) {
+    return { ok: false, reason: "wrong-document", message: "The document that answered is a different page in that tab. Those fields were discarded.", counts };
+  }
   if (read.facts.length === 0 && read.frameErrors > 0) return { ok: false, reason: "frames", message: "A frame on this page could not be read, and no labeled demographics were found outside it.", counts };
   if (read.facts.length === 0 && read.unlabeledControls > 0) return { ok: false, reason: "unlabeled", message: "This page has boxes, but their labels could not be read.", counts };
   if (read.facts.length === 0) return { ok: false, reason: "empty", message: "This tab doesn't have text or boxes we can use.", counts };
-  return { ok: true, tab, facts: read.facts, frameErrors: read.frameErrors, closedControls: read.closedControls, unlabeledControls: read.unlabeledControls };
+  return { ok: true, tab, facts: read.facts, frameErrors: read.frameErrors, closedControls: read.closedControls, unlabeledControls: read.unlabeledControls, host: read.host, path: read.path, build: read.build, webTabs: binding.webTabs, windows: binding.windows };
 }
 
-let cachedTab: ActiveTab | null = null;
-let watchingTabs = false;
-
-export function cachedActiveTab(): ActiveTab | null {
-  return cachedTab;
-}
-
-export function watchActiveTab(): void {
-  const refresh = () => {
-    void chrome.windows.getLastFocused({ windowTypes: ["normal"] }).then(async (win) => {
-      if (!win.id) return;
-      const [tab] = await chrome.tabs.query({ active: true, windowId: win.id });
-      if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) return;
-      cachedTab = { id: tab.id, url: tab.url, title: tab.title ?? "" };
-    });
+export function watchActiveTab(onChange: () => void): () => void {
+  const onActivated = () => onChange();
+  const onUpdated = (_tabId: number, info: { url?: string; status?: string }) => {
+    if (info.url || info.status === "loading") onChange();
   };
-  if (!watchingTabs) {
-    watchingTabs = true;
-    chrome.tabs.onActivated.addListener(refresh);
-    chrome.tabs.onUpdated.addListener(refresh);
-    chrome.windows.onFocusChanged.addListener(refresh);
-  }
-  refresh();
+  const onFocus = () => onChange();
+  chrome.tabs.onActivated.addListener(onActivated);
+  chrome.tabs.onUpdated.addListener(onUpdated);
+  chrome.windows.onFocusChanged.addListener(onFocus);
+  return () => {
+    chrome.tabs.onActivated.removeListener(onActivated);
+    chrome.tabs.onUpdated.removeListener(onUpdated);
+    chrome.windows.onFocusChanged.removeListener(onFocus);
+  };
 }
 
 export function chromeFormAccess() {
   return {
-    queryTab: async (): Promise<ActiveTab | null> => {
-      const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
-      if (win.id) {
-        const [tab] = await chrome.tabs.query({ active: true, windowId: win.id });
-        if (tab?.id && tab.url && /^https?:/.test(tab.url)) {
-          cachedTab = { id: tab.id, url: tab.url, title: tab.title ?? "" };
-          return cachedTab;
-        }
-      }
-      return cachedTab;
+    queryTab: async (): Promise<TabBinding> => {
+      const focused = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+      const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
+      const snaps = windows.map((windowSnap) => {
+        const active = windowSnap.tabs?.find((tab) => tab.active);
+        return {
+          id: windowSnap.id ?? 0,
+          focused: windowSnap.id === focused.id,
+          activeTab: active?.id && active.url ? { id: active.id, url: active.url, title: active.title ?? "" } : null,
+        };
+      });
+      return bindFocusedHttpTab(snaps);
     },
     hasPermission: (originPattern: string) => chrome.permissions.contains({ origins: [originPattern] }),
     requestPermission: async (originPattern: string) => {
@@ -148,7 +156,7 @@ export function chromeFormAccess() {
       return [...merged.values()];
     },
     read: async (tabId: number) => {
-      const empty = { facts: [] as PageFact[], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: true };
+      const empty = { facts: [] as PageFact[], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: true, host: "", path: "", build: "" };
       try {
         const frames = await chrome.scripting.executeScript({
           target: { tabId, allFrames: true },
@@ -158,9 +166,21 @@ export function chromeFormAccess() {
         let frameErrors = 0;
         let closedControls = 0;
         let unlabeledControls = 0;
+        let host = "";
+        let path = "";
+        let build = "";
         for (const frame of frames ?? []) {
           const result = frame.result;
           if (!result || !Array.isArray(result.facts)) {
+            frameErrors += 1;
+            continue;
+          }
+          if (frame.frameId === 0) {
+            host = result.host ?? "";
+            path = result.path ?? "";
+            build = result.build ?? "";
+          }
+          if (host && result.host && result.host !== host) {
             frameErrors += 1;
             continue;
           }
@@ -168,7 +188,7 @@ export function chromeFormAccess() {
           unlabeledControls += result.unlabeledControls ?? 0;
           facts.push(...result.facts.map((fact) => ({ ...fact, frameId: frame.frameId })));
         }
-        return { facts, frameErrors, closedControls, unlabeledControls, injectionFailed: false };
+        return { facts, frameErrors, closedControls, unlabeledControls, injectionFailed: false, host, path, build };
       } catch {
         return empty;
       }

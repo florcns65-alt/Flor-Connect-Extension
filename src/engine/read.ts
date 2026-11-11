@@ -19,6 +19,9 @@ export interface PageRead {
   closedControls: number;
   unlabeledControls: number;
   frameId: number;
+  host: string;
+  path: string;
+  build: string;
 }
 
 export interface FieldPick {
@@ -243,7 +246,16 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
   });
 
   walkControls(root);
-  return { facts, closedControls, unlabeledControls, frameId };
+  let host = "";
+  let path = "";
+  try {
+    host = root.location.host;
+    path = root.location.pathname;
+  } catch {
+    host = "";
+    path = "";
+  }
+  return { facts, closedControls, unlabeledControls, frameId, host, path, build: "2.5.0" };
 }
 
 export function mergeReads(parts: Array<PageRead | null>): { facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number } {

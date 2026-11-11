@@ -4,7 +4,7 @@ This uploads a **store build** of FLOR Connect to the existing listing `lkjfhjkg
 
 A store build is `npm run build:store`. It leaves out the manifest `key`, so Chrome keeps the store item's own id. The unpacked build keeps that key and stays `bmjkikhmfmaieahonelaljfkeapiflah`. Do not upload an unpacked zip to this listing.
 
-The package version has to be higher than 1.1.1, and higher than whatever is already published or sitting in review. `2.4.0` is the current version and passes that check against 1.1.1.
+The package version has to be higher than 1.1.1, and higher than whatever is already published or sitting in review. `2.5.0` is the current version and passes that check against 1.1.1.
 
 ## What you set up once
 
@@ -85,7 +85,7 @@ You can check a zip locally, with no Google credentials:
 ```bash
 export FLOR_SUPABASE_PUBLISHABLE_KEY="publishable-anon-key"
 npm run package:store
-node --experimental-strip-types scripts/webstore-cli.ts --check dist-zip/flor-connect-2.4.0.zip
+node --experimental-strip-types scripts/webstore-cli.ts --check dist-zip/flor-connect-2.5.0.zip
 ```
 
 That command does not upload.
