@@ -5,7 +5,7 @@ import { ActivityScreen } from "./screens/ActivityScreen";
 import { NotMemberScreen } from "./screens/GateScreens";
 import { HomeScreen } from "./screens/HomeScreen";
 import { PatientScreen } from "./screens/PatientScreen";
-import { ExistingValues, FillPreview, FillResult, NoForm, SavePreview } from "./screens/TransferScreens";
+import { CantRead, ChartRead, ExistingValues, FillPreview, FillResult, MappingReview, MultiPerson, NoForm, PickField, SavePreview } from "./screens/TransferScreens";
 import { emptySelectedCount, useTransfer } from "./use-transfer";
 import { PatientsScreen } from "./screens/PatientsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
@@ -100,6 +100,22 @@ export function App() {
 
   if (route === "patient") {
     const personName = patient ? `${patient.firstName ?? ""} ${patient.lastName ?? ""}`.trim() : "patient";
+    if (transfer.model?.kind === "cant-read") {
+      return <CantRead personName={personName} onRetry={transfer.retry} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
+    }
+    if (transfer.model?.kind === "chart" && patient) {
+      return <ChartRead person={patient} fields={transfer.model.fields} identity={transfer.model.identity} host={transfer.model.host} pageTitle={transfer.model.pageTitle} frameNote={transfer.model.frameNote} onReview={transfer.reviewSave} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
+    }
+    if (transfer.model?.kind === "mapping" && patient) {
+      return <MappingReview person={patient} fields={transfer.model.fields} host={transfer.model.host} pageTitle={transfer.model.pageTitle} matched={transfer.model.fields.filter((field) => field.status === "matched").length} remember={transfer.model.remember} layoutNote={transfer.model.layoutNote} blocked={transfer.model.blocked} onToggle={transfer.toggle} onPick={transfer.pickField} onRemember={transfer.toggleRemember} onContinue={transfer.reviewSave} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
+    }
+    if (transfer.model?.kind === "pick" && patient) {
+      return <PickField person={patient} lookingFor={transfer.model.lookingFor} pickedLabel={transfer.model.picked?.label ?? ""} pickedValue={transfer.model.picked?.value ?? ""} filling={transfer.model.direction === "fill"} onUse={transfer.acceptPick} onCancel={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
+    }
+    if (transfer.model?.kind === "multi" && patient) {
+      const others = transfer.model.people.filter((item) => !item.name.toLowerCase().includes((patient.lastName ?? "").toLowerCase()));
+      return <MultiPerson person={patient} others={others.length ? others : transfer.model.people} warning={transfer.model.error} onChoose={transfer.isolatePatient} onCancel={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />;
+    }
     if (transfer.model?.kind === "no-form") {
       return (
         <NoForm personName={personName} onRetry={transfer.startFill} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />
@@ -112,8 +128,9 @@ export function App() {
           fields={transfer.model.fields}
           host={transfer.model.host}
           pageTitle={transfer.model.pageTitle}
-          frameNote={transfer.model.frameErrors ? "Some frames on the page could not be read." : ""}
+          frameNote={transfer.model.frameNote}
           onToggle={transfer.toggle}
+          onPick={transfer.pickField}
           onContinue={transfer.continueFill}
           onBack={transfer.close}
           workspaceName={workspace?.name ?? null}
