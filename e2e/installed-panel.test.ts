@@ -94,7 +94,7 @@ function stub(person: { id: string; firstName: string; lastName: string; dateOfB
       if (message.type === "data:people" || message.type === "data:search") return ok({ people: [{ id: person.id, firstName: person.firstName, lastName: person.lastName, name: person.name, dateOfBirth: person.dateOfBirth, sex: person.sex, mrn: person.mrn, appointment: null }], total: 1, offset: 0, limit: 50 });
       if (message.type === "data:patient") return ok({ person, upcoming: [], recent: [] });
       if (message.type === "data:updatePerson") return { ok: false, error: { code: "server", message: "This test does not write to FLOR." } };
-      if (message.type === "meta:version") return ok({ version: "2.5.0" });
+      if (message.type === "meta:version") return ok({ version: "2.6.0" });
       return ok(null);
     };
     const install = () => {
@@ -131,7 +131,7 @@ describe.skipIf(!enabled)("installed side panel chain", () => {
     cpSync("dist", extensionDir, { recursive: true });
     const manifestPath = join(extensionDir, "manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { version: string; key?: string; host_permissions?: string[]; optional_host_permissions?: string[] };
-    expect(manifest.version).toBe("2.5.0");
+    expect(manifest.version).toBe("2.6.0");
     expect(manifest.key).toBeTruthy();
     manifest.host_permissions = [...(manifest.host_permissions ?? []), "http://127.0.0.1/*"];
     writeFileSync(manifestPath, JSON.stringify(manifest));

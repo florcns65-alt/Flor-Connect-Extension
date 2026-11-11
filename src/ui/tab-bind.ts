@@ -12,26 +12,30 @@ export interface WindowSnap {
 
 export type TabBinding =
   | { ok: true; tab: TabSnap; windowId: number; webTabs: number; windows: number }
-  | { ok: false; reason: "no-window" | "focused-not-web"; webTabs: number; windows: number };
+  | { ok: false; reason: "no-window" | "url-hidden" | "focused-not-web"; webTabs: number; windows: number };
 
-function isWeb(url: string): boolean {
-  return url.startsWith("https://") || url.startsWith("http://");
+/** Chrome omits tab.url until the extension may see that site. An empty address is not proof of a browser page. */
+export function classifyTabUrl(url: string | undefined): "web" | "hidden" | "non-web" {
+  if (!url) return "hidden";
+  if (url.startsWith("https://") || url.startsWith("http://")) return "web";
+  return "non-web";
 }
 
 /** The read target is only the active tab of the focused normal window. Another window's tab is never substituted. */
 export function bindFocusedHttpTab(windows: WindowSnap[]): TabBinding {
-  const webTabs = windows.filter((windowSnap) => windowSnap.activeTab && isWeb(windowSnap.activeTab.url)).length;
+  const webTabs = windows.filter((windowSnap) => classifyTabUrl(windowSnap.activeTab?.url) === "web").length;
   const focused = windows.find((windowSnap) => windowSnap.focused);
   if (!focused) return { ok: false, reason: "no-window", webTabs, windows: windows.length };
-  const tab = focused.activeTab;
-  if (!tab || !isWeb(tab.url)) return { ok: false, reason: "focused-not-web", webTabs, windows: windows.length };
-  return { ok: true, tab, windowId: focused.id, webTabs, windows: windows.length };
+  const kind = classifyTabUrl(focused.activeTab?.url);
+  if (!focused.activeTab || kind === "hidden") return { ok: false, reason: "url-hidden", webTabs, windows: windows.length };
+  if (kind === "non-web") return { ok: false, reason: "focused-not-web", webTabs, windows: windows.length };
+  return { ok: true, tab: focused.activeTab, windowId: focused.id, webTabs, windows: windows.length };
 }
 
 export function documentAddress(url: string): { host: string; path: string } | null {
   try {
     const parsed = new URL(url);
-    if (!isWeb(url)) return null;
+    if (classifyTabUrl(url) !== "web") return null;
     return { host: parsed.host, path: parsed.pathname };
   } catch {
     return null;

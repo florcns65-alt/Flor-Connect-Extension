@@ -48,11 +48,13 @@ export async function readActivePage(deps: {
 > {
   const binding = await deps.queryTab();
   if (!binding.ok) {
-    const counts = `${binding.windows} normal windows, ${binding.webTabs} with a web tab in front.`;
-    const message = binding.reason === "focused-not-web"
-      ? "The focused window's active tab is not a web page. Another window's tab was not read."
-      : "No normal browser window was focused, so no page was read.";
-    return { ok: false, reason: "no-tab", message, counts };
+    const counts = `${binding.windows} normal windows. Active tab address: ${binding.reason === "url-hidden" ? "hidden" : binding.reason === "focused-not-web" ? "not a website" : "no focused window"}.`;
+    const message = binding.reason === "url-hidden"
+      ? "Chrome did not share the active tab's address, so nothing was read. Allow site access for FLOR Connect, then try again. This was not treated as a browser page."
+      : binding.reason === "focused-not-web"
+        ? "The active tab is a browser page, not a website. Open the EHR tab, then try again."
+        : "No normal browser window was focused, so no page was read.";
+    return { ok: false, reason: binding.reason === "url-hidden" ? "permission" : "no-tab", message, counts };
   }
   const tab = binding.tab;
   let parsed: URL;

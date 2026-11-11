@@ -147,7 +147,11 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       setModel({ kind: "cant-read", message: provenance.text, counts: "" });
       return;
     }
-    void scan(direction);
+    const asked = chrome.permissions.request({ origins: ["https://*/*", "http://*/*"] });
+    void Promise.resolve(asked).then(
+      () => scan(direction),
+      () => scan(direction),
+    );
   }
 
   async function scan(direction: "fill" | "save"): Promise<void> {

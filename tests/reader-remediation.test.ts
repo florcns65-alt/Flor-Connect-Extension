@@ -126,6 +126,13 @@ describe("which tab is read", () => {
       { id: 11, focused: false, activeTab: phil },
     ]);
     expect(hidden.ok).toBe(false);
+    if (!hidden.ok) expect(hidden.reason).toBe("focused-not-web");
+    const omitted = bindFocusedHttpTab([
+      { id: 10, focused: true, activeTab: { id: 8, url: "", title: "" } },
+      { id: 11, focused: false, activeTab: phil },
+    ]);
+    expect(omitted.ok).toBe(false);
+    if (!omitted.ok) expect(omitted.reason).toBe("url-hidden");
     expect(acceptScan({
       requestId: 1,
       currentId: 2,
@@ -135,8 +142,8 @@ describe("which tab is read", () => {
       tabPath: "/openmrs/patient.page",
       documentHost: "o2.openmrs.org",
       documentPath: "/openmrs/patient.page",
-      readerBuild: "2.5.0",
-      panelBuild: "2.5.0",
+      readerBuild: "2.6.0",
+      panelBuild: "2.6.0",
     })).toBe("stale-request");
     expect(acceptScan({
       requestId: 4,
@@ -147,8 +154,8 @@ describe("which tab is read", () => {
       tabPath: "/openmrs/patient.page",
       documentHost: "demo.openemr.io",
       documentPath: "/openemr/interface/patient_file/summary/demographics.php",
-      readerBuild: "2.5.0",
-      panelBuild: "2.5.0",
+      readerBuild: "2.6.0",
+      panelBuild: "2.6.0",
     })).toBe("wrong-document");
     expect(acceptScan({
       requestId: 4,
@@ -159,8 +166,8 @@ describe("which tab is read", () => {
       tabPath: "/openmrs/patient.page",
       documentHost: "o2.openmrs.org",
       documentPath: "/openmrs/patient.page",
-      readerBuild: "2.4.0",
-      panelBuild: "2.5.0",
+      readerBuild: "2.5.0",
+      panelBuild: "2.6.0",
     })).toBe("stale-reader");
   });
 

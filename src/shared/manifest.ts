@@ -40,7 +40,7 @@ export function buildManifest(input: ManifestInput): Record<string, unknown> {
     },
     permissions: ["sidePanel", "storage", "identity", "scripting", "activeTab", "alarms"],
     host_permissions: [`${supabaseHost}/*`, `${florHost}/*`],
-    optional_host_permissions: ["https://*/*"],
+    optional_host_permissions: ["https://*/*", "http://*/*"],
     content_security_policy: {
       extension_pages: "script-src 'self'; object-src 'self'",
     },

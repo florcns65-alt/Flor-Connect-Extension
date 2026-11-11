@@ -1,7 +1,25 @@
 import { useEffect, useState } from "react";
 import { personInitials, roleLabel } from "../../shared/format";
 import type { Workspace } from "../../shared/types";
+import { provenanceLine } from "../tab-bind";
 import { CheckIcon, ChevronIcon, LeafIcon, ShieldIcon } from "./Icons";
+
+export function BuildStamp() {
+  const panel = __FLOR_VERSION__;
+  const installed = typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : panel;
+  const [worker, setWorker] = useState("");
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) return;
+    let live = true;
+    void chrome.runtime.sendMessage({ type: "meta:version" }).then((response: { ok?: boolean; data?: { version?: string } }) => {
+      if (live && response?.ok && response.data?.version) setWorker(response.data.version);
+    }).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  return <p className="build-stamp">{provenanceLine({ panel, installed, worker, reader: "" }).text}</p>;
+}
 
 export function Brand({ word }: { word: string }) {
   return (
@@ -50,6 +68,7 @@ export function Header({
 
   return (
     <header className="topbar">
+      <BuildStamp />
       <Brand word="FLOR" />
       <div className="topbar-side">
         {workspaceName ? (
