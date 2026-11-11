@@ -25,7 +25,8 @@ export function App() {
   const missingLegal = useFlorStore((state) => state.missingLegal);
   const workspaces = useFlorStore((state) => state.workspaces);
   const workspaceId = useFlorStore((state) => state.workspaceId);
-  const addPatient = useAddPatient(workspaceId);
+  const route = useFlorStore((state) => state.route);
+  const addPatient = useAddPatient(workspaceId, route === "patients" && auth.phase === "signed_in");
   const bootLoading = useFlorStore((state) => state.bootLoading);
   const appointments = useFlorStore((state) => state.appointments);
   const appointmentsLoading = useFlorStore((state) => state.appointmentsLoading);
@@ -43,7 +44,6 @@ export function App() {
   const patientChart = useFlorStore((state) => state.patientChart);
   const transfer = useTransfer(patient, workspaceId);
   const patientLoading = useFlorStore((state) => state.patientLoading);
-  const route = useFlorStore((state) => state.route);
   const previousRoute = useFlorStore((state) => state.previousRoute);
   const loadError = useFlorStore((state) => state.loadError);
   const offline = useFlorStore((state) => state.offline);
@@ -212,9 +212,11 @@ export function App() {
         <AddPatientScreen
           model={addPatient.model}
           {...shared}
-          onBack={addPatient.close}
+          onBack={addPatient.back}
+          onClose={addPatient.close}
           onRetry={addPatient.retry}
           onField={addPatient.setField}
+          onEdit={addPatient.edit}
           onCreate={addPatient.create}
           onCreateAnyway={addPatient.createAnyway}
           onOpenPatient={(id) => {

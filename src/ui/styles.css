@@ -19,6 +19,30 @@
   color-scheme: light;
 }
 
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/inter-latin-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/inter-latin-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/inter-latin-600.woff2") format("woff2");
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root { height: 100%; margin: 0; }
@@ -315,31 +339,83 @@ button:disabled { cursor: not-allowed; }
   line-height: 26px;
   letter-spacing: -0.02em;
 }
-.add-patient-button { margin: 0; }
-.add-patient-button span { color: var(--primary); font-size: 20px; line-height: 1; }
-.add-patient-scroll { padding-bottom: 4px; }
-.add-patient-state { display: grid; justify-items: center; gap: 12px; padding: 22px; }
-.add-patient-state .sk-avatar { width: 34px; height: 34px; border-radius: 50%; }
-.add-patient-source { display: flex; flex-direction: column; padding: 12px 14px; }
-.add-patient-fields { padding: 6px 14px; }
-.add-patient-field { display: grid; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.add-patient-field:last-child { border-bottom: 0; }
-.add-patient-field > span { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 650; }
-.add-patient-field small { color: var(--faint); font-size: 11px; font-weight: 400; text-align: right; }
-.add-patient-field input { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: white; padding: 9px 10px; }
-.add-patient-duplicates { padding: 12px; }
-.add-patient-duplicates h2 { margin: 0 0 4px; font-size: 15px; }
-.add-patient-duplicates > p { margin: 0 0 8px; }
-.add-patient-duplicates .person { padding: 8px 2px; }
-.add-patient-centered { justify-content: center; text-align: center; }
-.add-patient-empty-state { margin: auto 0; text-align: center; display: grid; justify-items: center; gap: 12px; padding: 18px 8px; }
-.add-patient-empty-state h1, .add-patient-success h1 { margin: 0; font-size: 19px; line-height: 25px; }
-.add-patient-empty-state p, .add-patient-success p { margin: 0; color: var(--muted); }
-.add-patient-state-icon, .add-patient-success-icon { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--sage); color: var(--primary); font-size: 32px; }
-.add-patient-success { flex: 1; display: grid; align-content: center; justify-items: center; gap: 14px; text-align: center; padding: 20px 8px; }
-.add-patient-success-icon { width: 82px; height: 82px; font-size: 38px; background: var(--primary); color: white; box-shadow: 0 0 0 12px var(--sage); margin: 12px 0; }
-.assigned-mrn { border-radius: 10px; background: var(--sage); color: var(--primary); padding: 8px 10px; font-size: 14px; }
-.add-patient-fields .add-patient-field { grid-template-columns: 1fr; }
+.add-patient-link {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2f6b64;
+  font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.add-patient-link:disabled { opacity: 0.55; }
+.patients-screen { font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif; }
+.patients-title { font-size: 26px; font-weight: 600; line-height: 32px; letter-spacing: -0.52px; }
+.patients-lede { font-size: 15px; font-weight: 400; line-height: 22px; color: #6a7577; }
+.add-flow {
+  --bg: #faf8f4;
+  --ink: #1e2a2c;
+  --muted: #6a7577;
+  --faint: #9aa3a4;
+  --primary: #2f6b64;
+  --primary-deep: #275e58;
+  --sage: #e7efeb;
+  --line: #ece8e1;
+  background: #faf8f4;
+  color: #1e2a2c;
+  font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  padding: 0 24px 24px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.add-flow .topbar { padding-top: 20px; }
+.add-flow .brand-name { font-size: 15px; font-weight: 600; line-height: 20px; letter-spacing: 0; }
+.add-flow .workspace-button { color: #6a7577; font-size: 13px; font-weight: 500; line-height: 18px; }
+.add-flow .workspace-button svg { transform: rotate(90deg); }
+.add-flow .me { background: #e7efeb; color: #2f6b64; font-size: 11px; font-weight: 600; line-height: 15px; }
+.add-flow .back-button { color: #6a7577; font-size: 14px; font-weight: 500; line-height: 20px; gap: 8px; padding: 0; }
+.add-flow .scroll { gap: 12px; }
+.add-copy { display: grid; gap: 6px; }
+.add-copy h1, .add-hero h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 26px; letter-spacing: 0; }
+.add-copy p, .add-hero p { margin: 0; color: #6a7577; font-size: 15px; font-weight: 400; line-height: 22px; }
+.add-flow .card { border-radius: 20px; box-shadow: 0 4px 20px rgba(30, 42, 44, 0.05); }
+.add-context { display: grid; gap: 8px; padding: 14px 16px; }
+.add-context > strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.add-context > span, .add-source span span, .add-kicker, .add-field small, .add-keep { color: #9aa3a4; font-size: 12px; font-weight: 400; line-height: 16px; }
+.add-source { display: flex; align-items: center; gap: 10px; }
+.add-source-icon { width: 32px; height: 32px; border-radius: 10px; background: #e7efeb; display: grid; place-items: center; flex: none; }
+.add-source strong { display: block; font-size: 14px; font-weight: 500; line-height: 20px; }
+.add-note { margin: 0; border-radius: 14px; padding: 10px 12px; font-size: 13px; font-weight: 500; line-height: 18px; }
+.add-note p { margin: 0; }
+.add-note.ok { background: #eaf4ee; color: #2e6b4e; }
+.add-note.warn { background: #f7f0e4; color: #8a5a14; }
+.add-flow-primary { border-radius: 16px; min-height: 52px; height: 52px; font-size: 15px; font-weight: 600; line-height: 20px; letter-spacing: 0; box-shadow: 0 6px 8px rgba(30, 42, 44, 0.12); }
+.add-flow-link { align-self: center; border: 0; background: transparent; color: #2f6b64; font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; line-height: 20px; padding: 0; }
+.add-flow-link-left { align-self: flex-start; }
+.add-flow-link:disabled { opacity: 0.55; }
+.add-reassure { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; color: #6a7577; font-size: 13px; font-weight: 400; line-height: 18px; }
+.add-draft, .add-match { display: grid; gap: 10px; padding: 12px 16px; }
+.add-field { display: grid; gap: 2px; }
+.add-field > span { color: #6a7577; font-size: 12px; font-weight: 400; line-height: 16px; }
+.add-field > strong { font-size: 15px; font-weight: 500; line-height: 20px; }
+.add-field input { width: 100%; border: 0; border-radius: 12px; background: #faf8f4; padding: 8px 12px; font-size: 15px; font-weight: 500; line-height: 20px; }
+.add-assigned { background: #e7efeb; color: #2f6b64; border-radius: 12px; padding: 8px 12px; font-size: 15px; font-weight: 500; line-height: 20px; }
+.add-keep { margin: 0; }
+.add-person { display: flex; align-items: center; gap: 12px; text-align: left; }
+.add-person-avatar { width: 44px; height: 44px; border-radius: 22px; background: #e7efeb; color: #2f6b64; display: grid; place-items: center; font-size: 16px; font-weight: 600; line-height: 20px; letter-spacing: -0.32px; flex: none; }
+.add-person strong { display: block; font-size: 16px; font-weight: 600; line-height: 20px; letter-spacing: -0.32px; }
+.add-person span span { display: block; color: #6a7577; font-size: 13px; font-weight: 400; line-height: 18px; }
+.add-match { width: 100%; border: 0; color: inherit; font: inherit; }
+.add-hero { flex: 1; display: grid; align-content: center; justify-items: center; gap: 20px; text-align: center; }
+.add-hero-icon { width: 88px; height: 88px; border-radius: 44px; background: #e7efeb; display: grid; place-items: center; }
+.add-hero-icon > span { width: 60px; height: 60px; border-radius: 30px; background: white; display: grid; place-items: center; }
+.add-hero-success > span { width: 56px; height: 56px; border-radius: 28px; background: #2f6b64; }
+.add-hero h1, .add-hero p { text-align: center; }
 .identity-flag.warn p { margin: 0 0 4px; }
 .identity-flag.warn p:last-child { margin-bottom: 0; }
 .section-heading, .detail-card h2, .section-label {

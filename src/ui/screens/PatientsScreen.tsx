@@ -127,7 +127,7 @@ export function PatientsScreen({
           <PeopleIcon />
         </div>
         <h2>No patients here yet</h2>
-        <p>Add a patient from an open demo registration form.</p>
+        <p>Add a patient from this tab.</p>
       </div>
     );
   } else if (noMatches) {
@@ -196,7 +196,7 @@ export function PatientsScreen({
   }
 
   return (
-    <main className="screen">
+    <main className="screen patients-screen">
       <Header
         workspaceName={workspaceName}
         workspaces={workspaces}
@@ -207,12 +207,12 @@ export function PatientsScreen({
       />
       <div className="scroll">
         <div>
-          <h1 className="page-title">Your patients</h1>
-          {subtitle ? <p className="lede">{subtitle}</p> : <div className="sk sk-line" />}
+          <h1 className="page-title patients-title">Your patients</h1>
+          {subtitle ? <p className="lede patients-lede">{subtitle}</p> : <div className="sk sk-line" />}
         </div>
         {onAddPatient && canAddPatient ? (
-          <button type="button" className="btn-quiet add-patient-button" onClick={onAddPatient} disabled={offline}>
-            <span aria-hidden="true">＋</span> Add New Patient
+          <button type="button" className="add-patient-link" onClick={onAddPatient} disabled={offline}>
+            Add patient from page
           </button>
         ) : null}
         <form className="search" role="search" onSubmit={(event) => event.preventDefault()}>

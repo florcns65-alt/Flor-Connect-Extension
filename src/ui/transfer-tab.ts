@@ -94,9 +94,10 @@ export function lastResolvedHttpTab(): { id: number; url: string; title: string 
 export function watchActiveTab(onChange: () => void): () => void {
   const refresh = (notify: boolean) => {
     void chromeFormAccess().queryTab().then((binding) => {
-      const previousId = resolvedHttpTab?.id ?? 0;
+      const previous = resolvedHttpTab;
       if (binding.ok) resolvedHttpTab = binding.tab;
-      if (notify && binding.ok && binding.tab.id !== previousId) onChange();
+      const changed = binding.ok && (binding.tab.id !== previous?.id || binding.tab.url !== previous?.url);
+      if (notify && changed) onChange();
     });
   };
   const onActivated = () => refresh(true);

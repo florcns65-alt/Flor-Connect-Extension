@@ -17,6 +17,7 @@ import {
 import type { FlorApi, PersonMutation } from "./flor-api";
 import { FlorError } from "../shared/errors";
 import { valuesMatchUpdate } from "../engine/map";
+import { patientInsertPayload } from "../engine/new-patient";
 import type { CreatePatientFields } from "../shared/messages";
 import { legalStatus } from "./legal";
 import { executeQuery, type QueryClient, type QueryOutcome } from "./query";
@@ -114,16 +115,18 @@ export function createSupabasePersonMutation(client: SupabaseClient): PersonMuta
       return { data, error: error ? { message: error.message, code: error.code } : null };
     },
     async create(workspaceId, userId, fields) {
-      const payload: Record<string, string> = {
-        name: `${fields.first_name} ${fields.last_name}`.trim(),
-        first_name: fields.first_name,
-        last_name: fields.last_name,
-        workspace_id: workspaceId,
-        user_id: userId,
-      };
-      for (const [key, value] of Object.entries(fields)) {
-        if (CREATE_COLUMNS.has(key) && value.trim()) payload[key] = value.trim();
-      }
+      const payload = patientInsertPayload(workspaceId, userId, {
+        first_name: fields.first_name ?? "",
+        last_name: fields.last_name ?? "",
+        date_of_birth: fields.date_of_birth,
+        sex: fields.sex,
+        phone: fields.phone,
+        email: fields.email,
+        address_line1: fields.address_line1,
+        city: fields.city,
+        state: fields.state,
+        postal_code: fields.postal_code,
+      });
       const { data, error } = await client
         .from("people")
         .insert(payload)
@@ -214,15 +217,15 @@ export function createSupabaseFlorApi(client: QueryClient, mutation?: PersonMuta
       const name = `${firstName} ${lastName}`.trim();
       const { data, error } = await mutation.create(workspaceId, userId, payload);
       if (error?.code === "23505") {
-        throw new FlorError("validation", "A patient with this name or identifier may already exist in FLOR. Search the patient list before trying again.");
+        throw new FlorError("validation", "This patient may already be in FLOR.");
       }
       if (error?.code === "42501" || error?.status === 403) {
         throw new FlorError("not_member", "Your FLOR role can't add patients to this workspace.");
       }
-      if (error || !data) throw new FlorError("server", "FLOR couldn't confirm that patient was created. Search the patient list before trying again.");
+      if (error || !data) throw new FlorError("server", "Couldn’t confirm the patient was added.");
       const person = toPersonDetail(parseWithSchema(PersonRowSchema, data));
       if (person.name?.trim().toLowerCase() !== name.toLowerCase() || !valuesMatchUpdate(payload, person)) {
-        throw new FlorError("server", "FLOR returned a different patient record. Review the patient list before trying again.");
+        throw new FlorError("server", "FLOR returned a different patient.");
       }
       logger.info("Created patient", { count: Object.keys(payload).length });
       return person;

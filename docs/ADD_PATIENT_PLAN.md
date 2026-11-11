@@ -1,18 +1,27 @@
-# Add Patient from a Demo Form — Implementation Plan
+# Add Patient from the current tab
 
 ## Goal
 
-From the Patients section, let a signed-in clinician read one new patient's demographics from a supported demo registration form, review the extracted values, and explicitly create that patient in the currently selected FLOR workspace.
+From Patients, a signed-in clinician reads one patient from the EHR or EMR page already open in the active tab, reviews the extracted demographics, and explicitly adds that patient to the selected FLOR workspace.
 
-The extension must never submit the source form, create a record from an existing chart, or write anything to FLOR before the clinician confirms the reviewed patient.
+The extension does not open or navigate another page, does not start from a blank form, and does not write to FLOR before confirmation. FLOR assigns the new MRN. The source chart's MRN is never copied into FLOR.
 
 ## Implementation status
 
-- [x] Add a Patients-section entry point and a separate read/review/create flow.
-- [x] Restrict source reading to the FLOR Connect OpenEMR demo origin (`https://demo.openemr.io`) and pages identified as new-patient registration forms.
-- [x] Route inserts through the worker using the signed-in user's ID, selected workspace, and existing RLS writer-role policy. Leave MRN generation to FLOR.
-- [x] Align the six Add Patient states to the supplied Figma screenshot (Patients entry, read registration form, review, possible existing patient, created, and unsupported form).
-- [ ] Complete focused runtime testing and the synthetic-data manual walkthrough.
+- [x] Patients entry: “Add patient from page”, limited to roles that can create patients.
+- [x] Read the active tab with the general labeled-page reader. A chart or a registration form can be the source. There is no EHR-specific adapter and no demo-origin allowlist.
+- [x] Show the extracted details for review and allow corrections. Unreadable pages and ambiguous identity stop the flow. There is no manual-entry fallback.
+- [x] Check possible duplicates before creation and again immediately before writing. Do not merge automatically.
+- [x] Create through the signed-in user's selected workspace and existing RLS. Omit MRN so FLOR generates it.
+- [ ] A live OpenEMR walkthrough still depends on the supplied demo session. Automated coverage uses synthetic charts and forms.
+
+## What this reader can do
+
+It reads one person's labeled demographics from the current document: labels, accessible names, autocomplete, definition lists, tables, and headings. It does not use OCR or a model. A page with more than one person, no readable name, or no permission is refused. Support is the pages whose labels the reader can see, not a promise about every EHR.
+
+## Older notes
+
+The checklist below is the original implementation plan. Where it says to accept only `demo.openemr.io` registration forms, that limit has been removed.
 
 ## Current state
 
