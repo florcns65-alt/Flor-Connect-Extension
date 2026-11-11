@@ -99,6 +99,20 @@ export async function handleMessage(ctx: WorkerContext, raw: unknown): Promise<E
         );
         return ok(PersonChartSchema.parse(result.chart));
       }
+      case "data:createPatient": {
+        const user = ctx.requireUser();
+        const selectedWorkspaceId = await ctx.getWorkspaceId();
+        if (selectedWorkspaceId !== parsed.data.workspaceId) {
+          throw new FlorError("not_member", "Choose this workspace in FLOR Connect before adding a patient.");
+        }
+        const workspace = (await ctx.api.listWorkspaces(user.id)).find((item) => item.id === selectedWorkspaceId);
+        if (!workspace) throw new FlorError("not_member", "You don't have access to that workspace.");
+        if (!(workspace.role === "owner" || workspace.role === "admin" || workspace.role === "clinician" || workspace.role === "staff")) {
+          throw new FlorError("not_member", "Your FLOR role can't add patients to this workspace.");
+        }
+        const person = await ctx.api.createPerson(selectedWorkspaceId, user.id, parsed.data.fields);
+        return ok({ person, upcoming: [], recent: [] });
+      }
       default:
         return fail("validation", "That request wasn't understood.");
     }

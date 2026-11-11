@@ -26,7 +26,7 @@ import { PersonChartSchema } from "../shared/messages";
 import type { PersonDetail } from "../shared/types";
 import { request } from "./bridge";
 import { useFlorStore } from "./store";
-import { acceptScan, documentAddress, hostPermissionCandidates, provenanceLine } from "./tab-bind";
+import { acceptScan, documentAddress, hostPermissionCandidates } from "./tab-bind";
 import { chromeFormAccess, lastResolvedHttpTab, readActivePage, watchActiveTab } from "./transfer-tab";
 
 type PageContext = {
@@ -71,19 +71,8 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   const memory = sessionLayoutsStore();
   const requestId = useRef(0);
   const holdInvalidation = useRef(false);
-  const [workerBuild, setWorkerBuild] = useState("");
   const panelBuild = __FLOR_VERSION__;
   const installedBuild = typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : panelBuild;
-  const provenance = provenanceLine({ panel: panelBuild, installed: installedBuild, worker: workerBuild, reader: "" });
-  useEffect(() => {
-    let live = true;
-    void chrome.runtime.sendMessage({ type: "meta:version" }).then((response: { ok?: boolean; data?: { version?: string } }) => {
-      if (live && response?.ok && response.data?.version) setWorkerBuild(response.data.version);
-    }).catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, []);
   useEffect(() => watchActiveTab(() => {
     if (holdInvalidation.current) return;
     requestId.current += 1;
@@ -145,8 +134,8 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   }
 
   function begin(direction: "fill" | "save"): void {
-    if (provenance.stale) {
-      setModel({ kind: "cant-read", message: provenance.text, counts: "" });
+    if (installedBuild && panelBuild !== installedBuild) {
+      setModel({ kind: "cant-read", message: "Close and reopen FLOR Connect before trying again. Nothing was read.", counts: "" });
       return;
     }
     const remembered = lastResolvedHttpTab();

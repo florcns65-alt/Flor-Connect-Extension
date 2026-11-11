@@ -8,12 +8,14 @@ import { PatientScreen } from "./screens/PatientScreen";
 import { CantRead, ChartRead, ExistingValues, FillPreview, FillResult, MappingReview, MultiPerson, NoForm, PickField, SavePreview } from "./screens/TransferScreens";
 import { emptySelectedCount, useTransfer } from "./use-transfer";
 import { PatientsScreen } from "./screens/PatientsScreen";
+import { AddPatientScreen } from "./screens/AddPatientScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SetupScreen } from "./screens/SetupScreen";
 import { WelcomeScreen } from "./screens/WelcomeScreen";
 import { WorkspaceScreen } from "./screens/WorkspaceScreen";
 import { loadMorePatients, openFlor, openPatient, retryPatient, selectWorkspace, signIn, signOut, useFlorSession } from "./session";
 import { useFlorStore } from "./store";
+import { useAddPatient } from "./use-add-patient";
 
 export function App() {
   useFlorSession();
@@ -23,6 +25,7 @@ export function App() {
   const missingLegal = useFlorStore((state) => state.missingLegal);
   const workspaces = useFlorStore((state) => state.workspaces);
   const workspaceId = useFlorStore((state) => state.workspaceId);
+  const addPatient = useAddPatient(workspaceId);
   const bootLoading = useFlorStore((state) => state.bootLoading);
   const appointments = useFlorStore((state) => state.appointments);
   const appointmentsLoading = useFlorStore((state) => state.appointmentsLoading);
@@ -204,6 +207,23 @@ export function App() {
   }
 
   if (route === "patients") {
+    if (addPatient.model) {
+      return (
+        <AddPatientScreen
+          model={addPatient.model}
+          {...shared}
+          onBack={addPatient.close}
+          onRetry={addPatient.retry}
+          onField={addPatient.setField}
+          onCreate={addPatient.create}
+          onCreateAnyway={addPatient.createAnyway}
+          onOpenPatient={(id) => {
+            addPatient.close();
+            void openPatient(id);
+          }}
+        />
+      );
+    }
     return (
       <PatientsScreen
         {...shared}
@@ -224,6 +244,7 @@ export function App() {
         offline={offline}
         onRetry={() => useFlorStore.getState().retry()}
         onOpenPatient={(id) => void openPatient(id)}
+        onAddPatient={addPatient.start}
       />
     );
   }

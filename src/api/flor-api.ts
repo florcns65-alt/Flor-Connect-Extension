@@ -1,4 +1,5 @@
-import type { DayBounds, LegalStatus, PeoplePage, PersonChart, TodayAppointment, Workspace } from "../shared/types";
+import type { CreatePatientFields } from "../shared/messages";
+import type { DayBounds, LegalStatus, PeoplePage, PersonChart, PersonDetail, TodayAppointment, Workspace } from "../shared/types";
 
 export interface DemographicUpdateResult {
   chart: PersonChart;
@@ -19,12 +20,18 @@ export interface FlorApi {
     fields: Record<string, string>,
     nowIso: string,
   ): Promise<DemographicUpdateResult>;
+  createPerson(workspaceId: string, userId: string, fields: CreatePatientFields): Promise<PersonDetail>;
 }
 
 export interface PersonMutation {
   update(
     workspaceId: string,
     personId: string,
+    fields: Record<string, string>,
+  ): Promise<{ data: unknown; error: { message?: string; code?: string; status?: number } | null }>;
+  create?(
+    workspaceId: string,
+    userId: string,
     fields: Record<string, string>,
   ): Promise<{ data: unknown; error: { message?: string; code?: string; status?: number } | null }>;
 }

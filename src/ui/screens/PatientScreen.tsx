@@ -2,7 +2,6 @@ import { ageInYears, appointmentStatusLabel, formatDob, formatSex, formatVisitWh
 import type { AppointmentSnippet, PersonDetail } from "../../shared/types";
 import { ArrowUpIcon, BackIcon, ClockIcon } from "../components/Icons";
 import { ListSkeleton, MessageState } from "../components/States";
-import { BuildStamp } from "../components/Chrome";
 import { Nav } from "../components/Nav";
 
 function Visit({ visit, upcoming }: { visit: AppointmentSnippet; upcoming: boolean }) {
@@ -51,7 +50,6 @@ export function PatientScreen({
     : "";
   return (
     <main className="screen">
-      <BuildStamp />
       <button type="button" className="back-button" onClick={onBack}>
         <BackIcon /> Your patients
       </button>

@@ -79,13 +79,3 @@ export function acceptScan(input: {
   if (input.documentPath && input.tabPath && input.documentPath !== input.tabPath) return "wrong-document";
   return "ok";
 }
-
-export function provenanceLine(input: { panel: string; installed: string; worker: string; reader: string }): { stale: boolean; text: string } {
-  const stale = Boolean(input.installed) && input.panel !== input.installed;
-  const worker = input.worker && input.worker !== input.panel ? `worker ${input.worker}` : `worker ${input.worker || "unknown"}`;
-  const reader = input.reader ? `reader ${input.reader}` : "reader not run";
-  const text = stale
-    ? `This side panel is build ${input.panel} but the installed extension is ${input.installed}. Close the panel and open it again before reading a page.`
-    : `Panel ${input.panel}. Installed ${input.installed || "unknown"}. ${worker}. ${reader}.`;
-  return { stale, text };
-}

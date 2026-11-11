@@ -1,4 +1,5 @@
 /** Page reader and field picker. Injected functions keep their helpers inside the function body. */
+import { classifyHint } from "./map";
 
 export interface PageFact {
   regionId: string;
@@ -18,6 +19,7 @@ export interface PageRead {
   facts: PageFact[];
   closedControls: number;
   unlabeledControls: number;
+  registrationForm: boolean;
   frameId: number;
   host: string;
   path: string;
@@ -255,7 +257,20 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
     host = "";
     path = "";
   }
-  return { facts, closedControls, unlabeledControls, frameId, host, path, build: "2.7.1" };
+  const identityFields = facts.filter((fact) => {
+    if (!fact.writable) return false;
+    const match = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
+    return match && "key" in match && (match.key === "first_name" || match.key === "last_name");
+  });
+  const identityKeys = identityFields.map((fact) => {
+    const match = classifyHint(`${fact.label} ${fact.controlName} ${fact.controlId}`);
+    return match && "key" in match ? match.key : "";
+  });
+  const oneIdentityPair = identityKeys.filter((key) => key === "first_name").length === 1 && identityKeys.filter((key) => key === "last_name").length === 1;
+  const pageSignal = `${root.title} ${root.location.pathname} ${[...root.querySelectorAll("h1, h2, h3")].map((item) => item.textContent ?? "").join(" ")}`;
+  const registrationSignal = /new[-_\s]+patient|add[-_\s]+patient|patient[-_\s]+registration|register[-_\s]+patient|\/patient\/new/i.test(pageSignal);
+  const formSignal = [...root.querySelectorAll("form")].some((form) => /registration|new[-_]?patient|patient[-_]?new|add[-_]?patient/i.test(`${form.id} ${form.getAttribute("name") ?? ""} ${form.getAttribute("action") ?? ""}`));
+  return { facts, closedControls, unlabeledControls, registrationForm: oneIdentityPair && (registrationSignal || formSignal), frameId, host, path, build: "2.7.1" };
 }
 
 export function mergeReads(parts: Array<PageRead | null>): { facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number } {

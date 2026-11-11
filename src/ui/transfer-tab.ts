@@ -41,9 +41,9 @@ export async function readActivePage(deps: {
   hasPermission: (originPattern: string) => Promise<boolean>;
   requestPermission: (originPattern: string) => Promise<boolean>;
   queryTab: () => Promise<TabBinding>;
-  read: (tabId: number) => Promise<{ facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number; injectionFailed: boolean; host: string; path: string; build: string }>;
+  read: (tabId: number) => Promise<{ facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number; injectionFailed: boolean; host: string; path: string; build: string; registrationForm?: boolean }>;
 }): Promise<
-  | { ok: true; tab: ActiveTab; facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number; host: string; path: string; build: string; webTabs: number; windows: number }
+  | { ok: true; tab: ActiveTab; facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number; host: string; path: string; build: string; registrationForm: boolean; webTabs: number; windows: number }
   | { ok: false; reason: "no-tab" | "unsupported" | "permission" | "injection" | "frames" | "unlabeled" | "empty" | "wrong-document" | "stale-reader"; message: string; counts: string }
 > {
   const binding = await deps.queryTab();
@@ -82,7 +82,7 @@ export async function readActivePage(deps: {
   if (read.facts.length === 0 && read.frameErrors > 0) return { ok: false, reason: "frames", message: "A frame on this page could not be read, and no labeled demographics were found outside it.", counts };
   if (read.facts.length === 0 && read.unlabeledControls > 0) return { ok: false, reason: "unlabeled", message: "This page has boxes, but their labels could not be read.", counts };
   if (read.facts.length === 0) return { ok: false, reason: "empty", message: "This tab doesn't have text or boxes we can use.", counts };
-  return { ok: true, tab, facts: read.facts, frameErrors: read.frameErrors, closedControls: read.closedControls, unlabeledControls: read.unlabeledControls, host: read.host, path: read.path, build: read.build, webTabs: binding.webTabs, windows: binding.windows };
+  return { ok: true, tab, facts: read.facts, frameErrors: read.frameErrors, closedControls: read.closedControls, unlabeledControls: read.unlabeledControls, host: read.host, path: read.path, build: read.build, registrationForm: Boolean(read.registrationForm), webTabs: binding.webTabs, windows: binding.windows };
 }
 
 let resolvedHttpTab: { id: number; url: string; title: string } | null = null;
@@ -177,7 +177,7 @@ export function chromeFormAccess() {
       return [...merged.values()];
     },
     read: async (tabId: number) => {
-      const empty = { facts: [] as PageFact[], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: true, host: "", path: "", build: "" };
+      const empty = { facts: [] as PageFact[], frameErrors: 0, closedControls: 0, unlabeledControls: 0, injectionFailed: true, host: "", path: "", build: "", registrationForm: false };
       try {
         const frames = await chrome.scripting.executeScript({
           target: { tabId, allFrames: true },
@@ -190,6 +190,7 @@ export function chromeFormAccess() {
         let host = "";
         let path = "";
         let build = "";
+        let registrationForm = false;
         for (const frame of frames ?? []) {
           const result = frame.result;
           if (!result || !Array.isArray(result.facts)) {
@@ -200,6 +201,7 @@ export function chromeFormAccess() {
             host = result.host ?? "";
             path = result.path ?? "";
             build = result.build ?? "";
+            registrationForm = Boolean(result.registrationForm);
           }
           if (host && result.host && result.host !== host) {
             frameErrors += 1;
@@ -209,7 +211,7 @@ export function chromeFormAccess() {
           unlabeledControls += result.unlabeledControls ?? 0;
           facts.push(...result.facts.map((fact) => ({ ...fact, frameId: frame.frameId })));
         }
-        return { facts, frameErrors, closedControls, unlabeledControls, injectionFailed: false, host, path, build };
+        return { facts, frameErrors, closedControls, unlabeledControls, injectionFailed: false, host, path, build, registrationForm };
       } catch {
         return empty;
       }

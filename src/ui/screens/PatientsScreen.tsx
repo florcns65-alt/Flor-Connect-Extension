@@ -64,6 +64,7 @@ export function PatientsScreen({
   offline,
   onRetry,
   onOpenPatient,
+  onAddPatient,
   onNavigate,
 }: {
   initials: string;
@@ -89,9 +90,12 @@ export function PatientsScreen({
   offline: boolean;
   onRetry: () => void;
   onOpenPatient: (id: string) => void;
+  onAddPatient?: () => void;
   onNavigate: (route: "home" | "patients" | "activity" | "settings") => void;
 }) {
   const searching = normalizeSearchQuery(query) !== null;
+  const role = workspaces.find((workspace) => workspace.id === workspaceId)?.role;
+  const canAddPatient = role === "owner" || role === "admin" || role === "clinician" || role === "staff";
   const sentinel = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const node = sentinel.current;
@@ -123,7 +127,7 @@ export function PatientsScreen({
           <PeopleIcon />
         </div>
         <h2>No patients here yet</h2>
-        <p>Patients are added in FLOR. Once they're there, they'll show up here.</p>
+        <p>Add a patient from an open demo registration form.</p>
       </div>
     );
   } else if (noMatches) {
@@ -206,6 +210,11 @@ export function PatientsScreen({
           <h1 className="page-title">Your patients</h1>
           {subtitle ? <p className="lede">{subtitle}</p> : <div className="sk sk-line" />}
         </div>
+        {onAddPatient && canAddPatient ? (
+          <button type="button" className="btn-quiet add-patient-button" onClick={onAddPatient} disabled={offline}>
+            <span aria-hidden="true">＋</span> Add New Patient
+          </button>
+        ) : null}
         <form className="search" role="search" onSubmit={(event) => event.preventDefault()}>
           <SearchIcon />
           <input

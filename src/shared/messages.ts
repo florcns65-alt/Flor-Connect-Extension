@@ -116,6 +116,30 @@ export const DemographicUpdateSchema = z
   })
   .strict();
 
+function validDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+export const CreatePatientFieldsSchema = z
+  .object({
+    first_name: z.string().trim().min(1).max(80),
+    last_name: z.string().trim().min(1).max(80),
+    date_of_birth: z.string().refine(validDateOnly, "Enter a valid date of birth.").optional(),
+    sex: z.string().trim().max(40).optional(),
+    phone: z.string().trim().max(40).optional(),
+    email: z.string().trim().max(120).email().optional(),
+    address_line1: z.string().trim().max(160).optional(),
+    city: z.string().trim().max(80).optional(),
+    state: z.string().trim().max(40).optional(),
+    postal_code: z.string().trim().max(20).optional(),
+  })
+  .strict();
+
+export type CreatePatientFields = z.infer<typeof CreatePatientFieldsSchema>;
+
 export const PersonChartSchema = z
   .object({
     person: PersonDetailSchema,
@@ -153,6 +177,11 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     workspaceId: z.string().uuid(),
     personId: z.string().uuid(),
     fields: DemographicUpdateSchema,
+  }).strict(),
+  z.object({
+    type: z.literal("data:createPatient"),
+    workspaceId: z.string().uuid(),
+    fields: CreatePatientFieldsSchema,
   }).strict(),
   z.object({ type: z.literal("workspace:set"), workspaceId: z.string().uuid() }).strict(),
 ]);
