@@ -1,6 +1,6 @@
 import { fillDocument, scanDocument, type FillInstruction, type FillWriteResult, type ScannedControl } from "../engine/page";
 import { cancelFieldPicker, installFieldPicker, readDocument, takeFieldPick, type FieldPick, type PageFact } from "../engine/read";
-import { bindFocusedHttpTab, documentAddress, type TabBinding } from "./tab-bind";
+import { bindFocusedHttpTab, documentAddress, hostPermissionCandidates, type TabBinding } from "./tab-bind";
 
 export interface ActiveTab {
   id: number;
@@ -85,15 +85,29 @@ export async function readActivePage(deps: {
   return { ok: true, tab, facts: read.facts, frameErrors: read.frameErrors, closedControls: read.closedControls, unlabeledControls: read.unlabeledControls, host: read.host, path: read.path, build: read.build, webTabs: binding.webTabs, windows: binding.windows };
 }
 
+let resolvedHttpTab: { id: number; url: string; title: string } | null = null;
+
+export function lastResolvedHttpTab(): { id: number; url: string; title: string } | null {
+  return resolvedHttpTab;
+}
+
 export function watchActiveTab(onChange: () => void): () => void {
-  const onActivated = () => onChange();
-  const onUpdated = (_tabId: number, info: { url?: string; status?: string }) => {
-    if (info.url || info.status === "loading") onChange();
+  const refresh = (notify: boolean) => {
+    void chromeFormAccess().queryTab().then((binding) => {
+      const previousId = resolvedHttpTab?.id ?? 0;
+      if (binding.ok) resolvedHttpTab = binding.tab;
+      if (notify && binding.ok && binding.tab.id !== previousId) onChange();
+    });
   };
-  const onFocus = () => onChange();
+  const onActivated = () => refresh(true);
+  const onUpdated = (_tabId: number, info: { url?: string }) => {
+    if (info.url) refresh(true);
+  };
+  const onFocus = () => refresh(false);
   chrome.tabs.onActivated.addListener(onActivated);
   chrome.tabs.onUpdated.addListener(onUpdated);
   chrome.windows.onFocusChanged.addListener(onFocus);
+  refresh(false);
   return () => {
     chrome.tabs.onActivated.removeListener(onActivated);
     chrome.tabs.onUpdated.removeListener(onUpdated);
@@ -105,18 +119,23 @@ export function chromeFormAccess() {
   return {
     queryTab: async (): Promise<TabBinding> => {
       const focused = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
-      const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
-      const snaps = windows.map((windowSnap) => {
-        const active = windowSnap.tabs?.find((tab) => tab.active);
-        return {
+      const windows = await chrome.windows.getAll({ windowTypes: ["normal"] });
+      const snaps = [];
+      for (const windowSnap of windows) {
+        const [active] = windowSnap.id ? await chrome.tabs.query({ active: true, windowId: windowSnap.id }) : [];
+        snaps.push({
           id: windowSnap.id ?? 0,
           focused: windowSnap.id === focused.id,
-          activeTab: active?.id && active.url ? { id: active.id, url: active.url, title: active.title ?? "" } : null,
-        };
-      });
+          activeTab: active?.id ? { id: active.id, url: active.url ?? "", title: active.title ?? "" } : null,
+        });
+      }
       return bindFocusedHttpTab(snaps);
     },
-    hasPermission: (originPattern: string) => chrome.permissions.contains({ origins: [originPattern] }),
+    hasPermission: async (originPattern: string) => {
+      const list = hostPermissionCandidates(`${originPattern.replace(/\/\*$/, "")}/`);
+      const answers = await Promise.all((list.length ? list : [originPattern]).map((item) => chrome.permissions.contains({ origins: [item] })));
+      return answers.some(Boolean);
+    },
     requestPermission: async (originPattern: string) => {
       try {
         return await chrome.permissions.request({ origins: [originPattern] });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { detectPeople, identityFor, mapPageFacts } from "../src/engine/facts";
 import { peopleSearchExpression } from "../src/api/filters";
 import { readDocument } from "../src/engine/read";
-import { acceptScan, bindFocusedHttpTab } from "../src/ui/tab-bind";
+import { acceptScan, bindFocusedHttpTab, hostPermissionCandidates, originPermission } from "../src/ui/tab-bind";
 import { readActivePage } from "../src/ui/transfer-tab";
 import type { PersonDetail } from "../src/shared/types";
 
@@ -169,6 +169,13 @@ describe("which tab is read", () => {
       readerBuild: "2.5.0",
       panelBuild: "2.6.0",
     })).toBe("stale-reader");
+  });
+
+  it("asks only for the active site, not every website", () => {
+    expect(originPermission("https://o2.openmrs.org/openmrs/coreapps/clinicianfacing/patient.page?patientId=abc")).toBe("https://o2.openmrs.org/*");
+    expect(originPermission("https://demo.openemr.io/openemr/interface/main/main_screen.php")).toBe("https://demo.openemr.io/*");
+    expect(originPermission("chrome://newtab/")).toBeNull();
+    expect(hostPermissionCandidates("http://127.0.0.1:4173/form")).toEqual(["http://127.0.0.1:4173/*", "http://127.0.0.1/*"]);
   });
 
   it("searches the displayed name with a real substring wildcard", () => {

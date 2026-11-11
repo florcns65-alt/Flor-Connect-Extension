@@ -255,7 +255,7 @@ export function readDocument(doc?: Document, frameId = 0): PageRead {
     host = "";
     path = "";
   }
-  return { facts, closedControls, unlabeledControls, frameId, host, path, build: "2.6.0" };
+  return { facts, closedControls, unlabeledControls, frameId, host, path, build: "2.7.0" };
 }
 
 export function mergeReads(parts: Array<PageRead | null>): { facts: PageFact[]; frameErrors: number; closedControls: number; unlabeledControls: number } {

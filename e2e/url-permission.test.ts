@@ -55,7 +55,7 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
       host_permissions?: string[];
       optional_host_permissions?: string[];
     };
-    expect(manifest.version).toBe("2.6.0");
+      expect(manifest.version).toBe("2.7.0");
     expect(manifest.host_permissions?.some((item) => item.includes("127.0.0.1"))).toBe(false);
     expect(manifest.optional_host_permissions).toEqual(expect.arrayContaining(["https://*/*", "http://*/*"]));
     const server = createServer((_request, response) => {
@@ -76,18 +76,6 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
       const listed = (await fetch("http://127.0.0.1:9335/json/list").then((response) => response.json())) as Array<{ id: string; url: string; type: string }>;
       const siteTarget = listed.find((target) => target.url.startsWith(site.url));
       expect(siteTarget?.id).toBeTruthy();
-      const worker = listed.find((target) => target.type === "service_worker");
-      expect(worker?.id).toBeTruthy();
-      const workerSession = String((await cdp.send("Target.attachToTarget", { targetId: worker!.id, flatten: true })).sessionId);
-      await cdp.send("Runtime.enable", {}, workerSession);
-      const workerProbe = await cdp.send("Runtime.evaluate", {
-        expression: `chrome.tabs.query({}).then((tabs) => ({ httpWithUrl: tabs.filter((tab) => typeof tab.url === "string" && tab.url.startsWith("http")).length, missingUrl: tabs.filter((tab) => !Object.prototype.hasOwnProperty.call(tab, "url")).length }))`,
-        awaitPromise: true,
-        returnByValue: true,
-      }, workerSession);
-      const workerTabs = (workerProbe.result as { value?: { httpWithUrl: number; missingUrl: number } } | undefined)?.value;
-      expect(workerTabs?.missingUrl).toBeGreaterThan(0);
-      expect(workerTabs?.httpWithUrl).toBe(0);
       const panel = await cdp.send("Target.createTarget", { url: "about:blank" });
       const session = String((await cdp.send("Target.attachToTarget", { targetId: panel.targetId, flatten: true })).sessionId);
       await cdp.send("Page.enable", {}, session);
@@ -104,7 +92,7 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
             if (message.type === "data:appointments") return ok([]);
             if (message.type === "data:people" || message.type === "data:search") return ok({ people: [{ id: person.id, firstName: person.firstName, lastName: person.lastName, name: person.name, dateOfBirth: person.dateOfBirth, sex: null, mrn: person.mrn, appointment: null }], total: 1, offset: 0, limit: 50 });
             if (message.type === "data:patient") return ok({ person, upcoming: [], recent: [] });
-            if (message.type === "meta:version") return ok({ version: "2.6.0" });
+            if (message.type === "meta:version") return ok({ version: "2.7.0" });
             if (message.type === "data:updatePerson") return { ok: false, error: { code: "server", message: "no write" } };
             return ok(null);
           };
@@ -119,13 +107,22 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
       }, session);
       await cdp.send("Page.navigate", { url: `chrome-extension://${extensionId}/src/ui/sidepanel.html` }, session);
       let text = "";
-      for (let attempt = 0; attempt < 30 && !text.includes("Panel 2.6.0"); attempt += 1) {
+      for (let attempt = 0; attempt < 30 && !text.includes("Panel 2.7.0"); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 200));
         text = String(((await cdp.send("Runtime.evaluate", { expression: "document.body.innerText", returnByValue: true }, session)).result as { value?: string } | undefined)?.value ?? "");
       }
-      expect(text).toContain("Panel 2.6.0");
-      expect(text).toContain("Installed 2.6.0");
+      expect(text).toContain("Panel 2.7.0");
+      expect(text).toContain("Installed 2.7.0");
       await cdp.send("Target.activateTarget", { targetId: siteTarget!.id });
+      const probe = await cdp.send("Runtime.evaluate", {
+        expression: `chrome.windows.getLastFocused({ windowTypes: ["normal"] }).then(async (win) => { const tabs = await chrome.tabs.query({ active: true, windowId: win.id }); const tab = tabs[0]; return { permissions: chrome.runtime.getManifest().permissions, hasId: Boolean(tab && tab.id), scheme: tab && tab.url ? tab.url.split(":")[0] : "missing" }; })`,
+        awaitPromise: true,
+        returnByValue: true,
+      }, session);
+      const seen = (probe.result as { value?: { permissions: string[]; hasId: boolean; scheme: string } } | undefined)?.value;
+      expect(seen?.permissions).toContain("tabs");
+      expect(seen?.hasId).toBe(true);
+      expect(seen?.scheme).toBe("http");
       const clicked = await cdp.send("Runtime.evaluate", {
         expression: `(() => { const button = [...document.querySelectorAll("button")].find((item) => (item.innerText || "").includes("Patients")); if (!button) return false; button.click(); return true; })()`,
         returnByValue: true,
@@ -143,7 +140,7 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
         text = String(((await cdp.send("Runtime.evaluate", { expression: "document.body.innerText", returnByValue: true }, session)).result as { value?: string } | undefined)?.value ?? "");
       }
-      expect(text).toContain("Panel 2.6.0");
+      expect(text).toContain("Panel 2.7.0");
       await cdp.send("Runtime.evaluate", {
         expression: `(() => { const button = [...document.querySelectorAll("button")].find((item) => (item.innerText || "").includes("Save this page to FLOR")); button.click(); })()`,
         returnByValue: true,
@@ -152,10 +149,20 @@ describe.skipIf(!enabled)("real Chrome tab address permission", () => {
       for (let attempt = 0; attempt < 40; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         result = String(((await cdp.send("Runtime.evaluate", { expression: "document.body.innerText", returnByValue: true }, session)).result as { value?: string } | undefined)?.value ?? "");
-        if (result.includes("did not share") || result.includes("Sánchez") || result.includes("John")) break;
+        if (result.includes("was denied") || result.includes("Sánchez")) break;
       }
-      expect(result).not.toContain("not a website");
-      expect(result.includes("did not share the active tab") || result.includes("Sánchez") || result.includes("John")).toBe(true);
+      const grants = await cdp.send("Runtime.evaluate", {
+        expression: `chrome.permissions.getAll().then((all) => all.origins || [])`,
+        awaitPromise: true,
+        returnByValue: true,
+      }, session);
+      const origins = (grants.result as { value?: string[] } | undefined)?.value ?? [];
+      expect(origins.some((origin) => origin === "http://*/*" || origin === "https://*/*" || origin === "<all_urls>")).toBe(false);
+      expect(result).toMatch(/was denied|did not show a site prompt/);
+      expect(result).toContain("127.0.0.1");
+      expect(result).toMatch(/Permission request: http:\/\/127\.0\.0\.1(?::\d+)?\/\*/);
+      expect(result).not.toContain("https://*/*");
+      expect(result).toContain("Nothing was read.");
     } finally {
       chrome.kill();
       site.close();

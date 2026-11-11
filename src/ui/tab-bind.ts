@@ -32,6 +32,24 @@ export function bindFocusedHttpTab(windows: WindowSnap[]): TabBinding {
   return { ok: true, tab: focused.activeTab, windowId: focused.id, webTabs, windows: windows.length };
 }
 
+/** Host permission for the active tab only. Never a wildcard over every website. */
+export function originPermission(url: string): string | null {
+  const patterns = hostPermissionCandidates(url);
+  return patterns[0] ?? null;
+}
+
+export function hostPermissionCandidates(url: string): string[] {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return [];
+    const exact = `${parsed.origin}/*`;
+    const anyPort = `${parsed.protocol}//${parsed.hostname}/*`;
+    return exact === anyPort ? [exact] : [exact, anyPort];
+  } catch {
+    return [];
+  }
+}
+
 export function documentAddress(url: string): { host: string; path: string } | null {
   try {
     const parsed = new URL(url);

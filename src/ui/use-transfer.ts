@@ -26,8 +26,8 @@ import { PersonChartSchema } from "../shared/messages";
 import type { PersonDetail } from "../shared/types";
 import { request } from "./bridge";
 import { useFlorStore } from "./store";
-import { acceptScan, documentAddress, provenanceLine } from "./tab-bind";
-import { chromeFormAccess, readActivePage, watchActiveTab } from "./transfer-tab";
+import { acceptScan, documentAddress, hostPermissionCandidates, provenanceLine } from "./tab-bind";
+import { chromeFormAccess, lastResolvedHttpTab, readActivePage, watchActiveTab } from "./transfer-tab";
 
 type PageContext = {
   facts: PageFact[];
@@ -70,6 +70,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
   const access = useMemo(() => chromeFormAccess(), []);
   const memory = sessionLayoutsStore();
   const requestId = useRef(0);
+  const holdInvalidation = useRef(false);
   const [workerBuild, setWorkerBuild] = useState("");
   const panelBuild = __FLOR_VERSION__;
   const installedBuild = typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : panelBuild;
@@ -84,6 +85,7 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
     };
   }, []);
   useEffect(() => watchActiveTab(() => {
+    if (holdInvalidation.current) return;
     requestId.current += 1;
     setModel(null);
   }), []);
@@ -147,11 +149,44 @@ export function useTransfer(person: PersonDetail | null, workspaceId: string | n
       setModel({ kind: "cant-read", message: provenance.text, counts: "" });
       return;
     }
-    const asked = chrome.permissions.request({ origins: ["https://*/*", "http://*/*"] });
-    void Promise.resolve(asked).then(
-      () => scan(direction),
-      () => scan(direction),
-    );
+    const remembered = lastResolvedHttpTab();
+    const candidates = remembered ? hostPermissionCandidates(remembered.url) : [];
+    const pattern = candidates[0];
+    if (!pattern || !remembered) {
+      setModel({ kind: "cant-read", message: "The active tab's address is not ready. Press the button again.", counts: "" });
+      return;
+    }
+    const host = new URL(remembered.url).host;
+    holdInvalidation.current = true;
+    const finish = () => {
+      holdInvalidation.current = false;
+    };
+    const denied = () => {
+      setModel({
+        kind: "cant-read",
+        message: `Site access for ${host} was denied, so nothing was read. The request was only for that site.`,
+        counts: `Permission request: ${pattern}`,
+      });
+    };
+    void Promise.all(candidates.map((item) => chrome.permissions.contains({ origins: [item] }))).then(async (answers) => {
+      if (!answers.some(Boolean)) {
+        try {
+          const granted = await chrome.permissions.request({ origins: [pattern] });
+          if (!granted) {
+            denied();
+            return;
+          }
+        } catch {
+          setModel({
+            kind: "cant-read",
+            message: `Chrome did not show a site prompt for ${host}. Nothing was read.`,
+            counts: `Permission request: ${pattern}`,
+          });
+          return;
+        }
+      }
+      await scan(direction);
+    }).finally(finish);
   }
 
   async function scan(direction: "fill" | "save"): Promise<void> {

@@ -40,7 +40,7 @@ describe("manifest", () => {
       name: "FLOR Connect",
       version: "2.0.0",
       minimum_chrome_version: "116",
-      permissions: ["sidePanel", "storage", "identity", "scripting", "activeTab", "alarms"],
+      permissions: ["sidePanel", "storage", "identity", "scripting", "activeTab", "alarms", "tabs"],
       host_permissions: [
         "https://wbxzevwfxizfjtxrarjq.supabase.co/*",
         "https://florcns-preview-onbk3fadxa-ue.a.run.app/*",
