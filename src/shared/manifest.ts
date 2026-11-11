@@ -38,9 +38,9 @@ export function buildManifest(input: ManifestInput): Record<string, unknown> {
     side_panel: {
       default_path: input.sidePanelPath,
     },
-    permissions: ["sidePanel", "storage", "identity", "scripting", "activeTab", "alarms"],
+    permissions: ["sidePanel", "storage", "identity", "scripting", "activeTab", "alarms", "tabs"],
     host_permissions: [`${supabaseHost}/*`, `${florHost}/*`],
-    optional_host_permissions: ["https://*/*"],
+    optional_host_permissions: ["https://*/*", "http://*/*"],
     content_security_policy: {
       extension_pages: "script-src 'self'; object-src 'self'",
     },

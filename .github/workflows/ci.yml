@@ -36,7 +36,7 @@ jobs:
           import json
           manifest = json.load(open("dist/manifest.json"))
           assert manifest["name"] == "FLOR Connect"
-          assert manifest["version"] == "2.2.0"
+          assert manifest["version"] == "2.7.0"
           assert manifest["minimum_chrome_version"] == "116"
           assert "key" in manifest
           assert manifest["background"]["type"] == "module"

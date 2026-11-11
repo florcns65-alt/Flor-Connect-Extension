@@ -30,11 +30,8 @@ export interface FillWriteResult {
   changed: boolean;
 }
 
-function normalizeSpace(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
 export function scanDocument(doc?: Document, frameId = 0): ScannedControl[] {
+  const normalizeSpace = (value: string): string => value.replace(/\s+/g, " ").trim();
   const root = doc ?? document;
   const controls: ScannedControl[] = [];
   const seenRadios = new Set<string>();
@@ -143,6 +140,7 @@ export function scanDocument(doc?: Document, frameId = 0): ScannedControl[] {
 }
 
 export function fillDocument(doc: Document | undefined, instructions: FillInstruction[]): FillWriteResult[] {
+  const normalizeSpace = (value: string): string => value.replace(/\s+/g, " ").trim();
   const root = doc ?? document;
 
   const findControl = (instruction: FillInstruction): HTMLElement | null => {

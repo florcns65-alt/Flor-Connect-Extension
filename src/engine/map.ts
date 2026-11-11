@@ -33,12 +33,12 @@ const LABELS: Record<DemographicKey, string> = {
 };
 
 const SYNONYMS: Record<DemographicKey, string[]> = {
-  first_name: ["first name", "given name", "forename", "fname", "form fname", "patient first name"],
+  first_name: ["first name", "given name", "given", "forename", "fname", "form fname", "patient first name"],
   last_name: ["last name", "family name", "surname", "lname", "form lname"],
-  date_of_birth: ["date of birth", "birth date", "birthdate", "dob", "born", "form dob"],
+  date_of_birth: ["date of birth", "birth date", "birthdate", "dob", "born", "form dob", "bday"],
   sex: ["sex", "gender", "administrative sex", "birth sex", "form sex"],
-  mrn: ["mrn", "external id", "external identifier", "medical record number", "patient id", "identifier", "pubpid", "form pubpid"],
-  phone: ["home phone", "phone", "telephone", "mobile phone", "phone number", "form phone home"],
+  mrn: ["mrn", "medical record number", "medical record", "external id", "pubpid", "form pubpid"],
+  phone: ["home phone", "phone", "telephone", "mobile phone", "phone number", "form phone home", "tel"],
   email: ["email", "e-mail", "email address", "form email"],
   address_line1: ["address", "street", "address line 1", "address 1", "street address"],
   city: ["city", "town"],
@@ -56,6 +56,12 @@ export interface MappedField {
   note: string;
   occupied: boolean;
   selected: boolean;
+  evidence?: string;
+  regionId?: string;
+  writable?: boolean;
+  controlId?: string;
+  controlName?: string;
+  controlTag?: "input" | "textarea" | "select" | "radio" | "text";
 }
 
 export interface TransferLock {
@@ -63,6 +69,7 @@ export interface TransferLock {
   url: string;
   patientId: string;
   workspaceId: string;
+  regionId?: string;
 }
 
 export function fieldLabel(key: DemographicKey): string {
@@ -112,8 +119,7 @@ function scoreKey(hint: string, key: DemographicKey): number {
   return best;
 }
 
-function bestKey(control: ScannedControl): { key: DemographicKey; score: number } | null {
-  const hint = `${control.label} ${control.name} ${control.id}`;
+export function classifyHint(hint: string): { key: DemographicKey } | { ambiguous: true } | null {
   let winner: { key: DemographicKey; score: number } | null = null;
   let runner = 0;
   for (const key of DEMOGRAPHIC_KEYS) {
@@ -124,8 +130,15 @@ function bestKey(control: ScannedControl): { key: DemographicKey; score: number 
     } else if (score > runner) runner = score;
   }
   if (!winner || winner.score < 80) return null;
-  if (runner >= winner.score - 10 && runner >= 80) return null;
-  return winner;
+  if (runner >= winner.score - 10 && runner >= 80) return { ambiguous: true };
+  return { key: winner.key };
+}
+
+function bestKey(control: ScannedControl): { key: DemographicKey; score: number } | null {
+  const hint = `${control.label} ${control.name} ${control.id}`;
+  const classified = classifyHint(hint);
+  if (!classified || "ambiguous" in classified) return null;
+  return { key: classified.key, score: 100 };
 }
 
 export function mapControls(controls: ScannedControl[], person: PersonDetail): MappedField[] {
@@ -208,9 +221,14 @@ export function selectedFill(fields: MappedField[]): MappedField[] {
 }
 
 export function instructionsFor(fields: MappedField[]): FillInstruction[] {
-  return selectedFill(fields).flatMap((field) => {
-    if (!field.control) return [];
-    return [{ id: field.control.id, name: field.control.name, label: field.fieldLabel, tag: field.control.tag, value: field.florValue }];
+  return fields.flatMap((field) => {
+    if (!field.selected || field.status !== "matched" || !field.florValue) return [];
+    if (!field.writable && !field.control) return [];
+    const tag = field.control?.tag || (field.controlTag && field.controlTag !== "text" ? field.controlTag : "input");
+    const id = field.control?.id || field.controlId || "";
+    const name = field.control?.name || field.controlName || "";
+    if (!id && !name) return [];
+    return [{ id, name, label: field.fieldLabel, tag, value: field.florValue }];
   });
 }
 
@@ -268,7 +286,7 @@ export function checkIdentity(fields: MappedField[], person: PersonDetail): Iden
 
 export function saveFieldsFrom(fields: MappedField[]): SaveField[] {
   return fields
-    .filter((field): field is MappedField & { key: DemographicKey } => Boolean(field.key && field.control && field.pageValue && field.status === "matched"))
+    .filter((field): field is MappedField & { key: DemographicKey } => Boolean(field.key && field.pageValue && field.status === "matched"))
     .map((field) => ({ key: field.key, label: field.fieldLabel, value: field.pageValue, selected: true }));
 }
 
@@ -305,14 +323,25 @@ export function allowlistedUpdate(fields: SaveField[]): Record<string, string> {
 }
 
 function toIso(value: string): string {
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  const text = value.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-  const named = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(value.trim());
-  if (!named) return "";
-  const month = months.indexOf(named[2].slice(0, 3).toLowerCase());
-  if (month < 0) return "";
-  return `${named[3]}-${String(month + 1).padStart(2, "0")}-${named[1].padStart(2, "0")}`;
+  const named = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(text);
+  if (named) {
+    const month = months.indexOf(named[2].slice(0, 3).toLowerCase());
+    if (month < 0) return "";
+    return `${named[3]}-${String(month + 1).padStart(2, "0")}-${named[1].padStart(2, "0")}`;
+  }
+  const numeric = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(text);
+  if (!numeric) return "";
+  const first = Number(numeric[1]);
+  const second = Number(numeric[2]);
+  if (first <= 12 && second <= 12) return "";
+  const day = first > 12 ? first : second;
+  const month = first > 12 ? second : first;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return "";
+  return `${numeric[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function normalizeSex(value: string): string {
@@ -340,7 +369,7 @@ export function valuesMatchUpdate(payload: Record<string, string>, person: Perso
 }
 
 export function locksMatch(expected: TransferLock, current: TransferLock): boolean {
-  return expected.tabId === current.tabId && expected.url === current.url && expected.patientId === current.patientId && expected.workspaceId === current.workspaceId;
+  return expected.tabId === current.tabId && expected.url === current.url && expected.patientId === current.patientId && expected.workspaceId === current.workspaceId && (expected.regionId ?? "") === (current.regionId ?? "");
 }
 
 export function canUndo(written: string, current: string): boolean {

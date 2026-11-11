@@ -318,7 +318,7 @@ button:disabled { cursor: not-allowed; }
 .section-heading, .detail-card h2, .section-label {
   font-size: 15px;
   font-weight: 500;
-  line-height: 22px;
+  line-height: 20px;
 }
 .body-copy, .lede {
   font-size: 15px;
@@ -326,7 +326,15 @@ button:disabled { cursor: not-allowed; }
   line-height: 22px;
 }
 
-.lede { margin: 0; font-size: 14.5px; }
+.lede { margin: 0; font-size: 15px; line-height: 22px; font-weight: 400; }
+.detail-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; padding: 8px 4px; }
+.detail-row > span, .remember > span { display: flex; flex-direction: column; gap: 2px; }
+.detail-row .check { color: var(--primary); font-weight: 700; }
+.pick-status { background: #e7f2ec; color: var(--primary); border-radius: 12px; text-align: center; padding: 12px; font-size: 15px; line-height: 22px; }
+.identity-flag.warn { background: #f8f1e4; color: #8a5a12; }
+.page-note { margin: 0; color: var(--faint); font-size: 13px; }
+.build-stamp { margin: 0 0 6px; font-size: 11px; line-height: 14px; color: var(--faint); }
+.remember { display: flex; gap: 10px; align-items: flex-start; margin-top: 12px; }
 
 .search {
   display: flex;
