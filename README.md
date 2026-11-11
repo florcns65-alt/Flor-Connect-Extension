@@ -42,7 +42,7 @@ Click the toolbar icon. The side panel opens.
 
 `npm run build:store` is the same build without the manifest `key`. That is the package for the Chrome Web Store item `lkjfhjkgfbonfnlchglghoialgiipbid`. It does not keep the unpacked id above.
 
-`npm run package` builds the unpacked extension and writes `dist-zip/flor-connect-2.1.0.zip` plus a `.sha256` file. `npm run package:store` does the same for the store build.
+`npm run package` builds the unpacked extension and writes `dist-zip/flor-connect-2.2.0.zip` plus a `.sha256` file. `npm run package:store` does the same for the store build.
 
 ## Scripts
 

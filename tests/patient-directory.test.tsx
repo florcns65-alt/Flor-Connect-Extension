@@ -173,12 +173,13 @@ describe("patient list states", () => {
         offline={false}
         onBack={() => undefined}
         onRetry={() => undefined}
+        onFill={() => undefined}
+        onSave={() => undefined}
         onNavigate={() => undefined}
       />,
     );
-    expect(screen.getByRole("button", { name: /fill this page/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /save this page to flor/i })).toBeDisabled();
-    expect(screen.getByText("Coming soon")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /fill this page/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /save this page to flor/i })).toBeEnabled();
     expect(toSelectedPatient(detail).mrn).toBe("100245");
   });
 });

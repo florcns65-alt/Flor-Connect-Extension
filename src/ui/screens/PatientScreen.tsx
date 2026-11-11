@@ -27,6 +27,8 @@ export function PatientScreen({
   offline,
   onBack,
   onRetry,
+  onFill,
+  onSave,
   onNavigate,
 }: {
   patient: PersonDetail | null;
@@ -37,6 +39,8 @@ export function PatientScreen({
   offline: boolean;
   onBack: () => void;
   onRetry: () => void;
+  onFill: () => void;
+  onSave: () => void;
   onNavigate: (route: "home" | "patients" | "activity" | "settings") => void;
 }) {
   const name = patient ? personDisplayName(patient) : "";
@@ -76,15 +80,12 @@ export function PatientScreen({
         </div>
       )}
       <div className="dock">
-        <button type="button" className="btn-primary" disabled aria-describedby="transfer-soon">
+        <button type="button" className="btn-primary" onClick={onFill} disabled={!patient}>
           <ArrowUpIcon /> Fill this page
         </button>
-        <button type="button" className="link-action" disabled>
+        <button type="button" className="link-action" onClick={onSave} disabled={!patient}>
           ↓ Save this page to FLOR
         </button>
-        <p id="transfer-soon" className="action-note">
-          Coming soon
-        </p>
         <Nav route="patient" onChange={onNavigate} />
       </div>
     </main>

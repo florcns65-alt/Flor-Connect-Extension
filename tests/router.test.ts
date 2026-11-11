@@ -30,6 +30,9 @@ function context(api: Partial<FlorApi>, extra: Partial<WorkerContext> = {}): Wor
       getPersonChart: async () => {
         throw new Error("unused");
       },
+      updatePersonDemographics: async () => {
+        throw new Error("unused");
+      },
       ...api,
     },
     ...extra,

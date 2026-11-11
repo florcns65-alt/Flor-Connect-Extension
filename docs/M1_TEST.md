@@ -17,7 +17,7 @@ npm run build
 ```
 
 4. Open `chrome://extensions`, turn on Developer mode, choose **Load unpacked**, and select the `dist` folder.
-5. Confirm the extension id is `bmjkikhmfmaieahonelaljfkeapiflah` and the name is FLOR Connect 2.1.0.
+5. Confirm the extension id is `bmjkikhmfmaieahonelaljfkeapiflah` and the name is FLOR Connect 2.2.0.
 
 `npm run build` uses the preview FLOR origin (`https://florcns-preview-onbk3fadxa-ue.a.run.app`). For a production-origin build later, set `FLOR_PROFILE=prod` as well. `npm run build:store` omits the manifest `key`, so that package will not keep this extension id.
 
@@ -27,7 +27,7 @@ npm run build
 2. Choose **Continue with Google**. A Google account chooser opens. Pick a FLOR account that has finished the in-app agreements.
 3. The panel leaves the welcome screen. It does not ask you to paste a code.
 4. Close the Google window instead. The panel stays on welcome and says sign-in was cancelled.
-5. Open Settings. The signed-in email is the Google account. The version is 2.1.0.
+5. Open Settings. The signed-in email is the Google account. The version is 2.2.0.
 
 ## Legal gate
 
@@ -68,4 +68,4 @@ export FLOR_SUPABASE_PUBLISHABLE_KEY="the-publishable-anon-key"
 npm run package
 ```
 
-`dist-zip/flor-connect-2.1.0.zip` and `dist-zip/flor-connect-2.1.0.zip.sha256` are written. Loading that unpacked zip (unzipped) shows the same extension id.
+`dist-zip/flor-connect-2.2.0.zip` and `dist-zip/flor-connect-2.2.0.zip.sha256` are written. Loading that unpacked zip (unzipped) shows the same extension id.

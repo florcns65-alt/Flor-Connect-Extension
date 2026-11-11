@@ -5,6 +5,8 @@ import { ActivityScreen } from "./screens/ActivityScreen";
 import { NotMemberScreen } from "./screens/GateScreens";
 import { HomeScreen } from "./screens/HomeScreen";
 import { PatientScreen } from "./screens/PatientScreen";
+import { ExistingValues, FillPreview, FillResult, NoForm, SavePreview } from "./screens/TransferScreens";
+import { emptySelectedCount, useTransfer } from "./use-transfer";
 import { PatientsScreen } from "./screens/PatientsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SetupScreen } from "./screens/SetupScreen";
@@ -36,6 +38,7 @@ export function App() {
   const directoryError = useFlorStore((state) => state.directoryError);
   const patient = useFlorStore((state) => state.patient);
   const patientChart = useFlorStore((state) => state.patientChart);
+  const transfer = useTransfer(patient, workspaceId);
   const patientLoading = useFlorStore((state) => state.patientLoading);
   const route = useFlorStore((state) => state.route);
   const previousRoute = useFlorStore((state) => state.previousRoute);
@@ -96,6 +99,73 @@ export function App() {
   };
 
   if (route === "patient") {
+    const personName = patient ? `${patient.firstName ?? ""} ${patient.lastName ?? ""}`.trim() : "patient";
+    if (transfer.model?.kind === "no-form") {
+      return (
+        <NoForm personName={personName} onRetry={transfer.startFill} onBack={transfer.close} workspaceName={workspace?.name ?? null} initials={initials} />
+      );
+    }
+    if (transfer.model?.kind === "preview" && patient) {
+      return (
+        <FillPreview
+          person={patient}
+          fields={transfer.model.fields}
+          host={transfer.model.host}
+          pageTitle={transfer.model.pageTitle}
+          frameNote={transfer.model.frameErrors ? "Some frames on the page could not be read." : ""}
+          onToggle={transfer.toggle}
+          onContinue={transfer.continueFill}
+          onBack={transfer.close}
+          workspaceName={workspace?.name ?? null}
+          initials={initials}
+        />
+      );
+    }
+    if (transfer.model?.kind === "conflicts" && patient) {
+      return (
+        <ExistingValues
+          person={patient}
+          fields={transfer.model.fields}
+          emptyCount={emptySelectedCount(transfer.model.fields)}
+          onToggle={transfer.toggle}
+          onFill={transfer.fillConflicts}
+          onBack={transfer.close}
+          workspaceName={workspace?.name ?? null}
+          initials={initials}
+        />
+      );
+    }
+    if (transfer.model?.kind === "result") {
+      return (
+        <FillResult
+          filled={transfer.model.filled}
+          skipped={transfer.model.skipped}
+          site={transfer.model.site}
+          onBack={transfer.close}
+          onUndo={() => void transfer.undo()}
+          workspaceName={workspace?.name ?? null}
+          initials={initials}
+        />
+      );
+    }
+    if (transfer.model?.kind === "save" && patient) {
+      return (
+        <SavePreview
+          person={patient}
+          fields={transfer.model.fields}
+          identity={transfer.model.identity}
+          host={transfer.model.host}
+          pageTitle={transfer.model.pageTitle}
+          onToggle={transfer.toggleSave}
+          onSave={() => void transfer.save()}
+          onBack={transfer.close}
+          busy={transfer.model.busy}
+          error={transfer.model.error}
+          workspaceName={workspace?.name ?? null}
+          initials={initials}
+        />
+      );
+    }
     return (
       <PatientScreen
         patient={patient}
@@ -106,6 +176,8 @@ export function App() {
         offline={offline}
         onBack={() => useFlorStore.getState().setRoute(previousRoute)}
         onRetry={() => retryPatient()}
+        onFill={transfer.startFill}
+        onSave={transfer.startSave}
         onNavigate={(next) => useFlorStore.getState().setRoute(next)}
       />
     );

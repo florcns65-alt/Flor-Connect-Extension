@@ -100,6 +100,22 @@ export const PeoplePageSchema = z
   })
   .strict();
 
+export const DemographicUpdateSchema = z
+  .object({
+    first_name: z.string().max(80).optional(),
+    last_name: z.string().max(80).optional(),
+    date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    sex: z.string().max(40).optional(),
+    mrn: z.string().max(64).optional(),
+    phone: z.string().max(40).optional(),
+    email: z.string().max(120).optional(),
+    address_line1: z.string().max(160).optional(),
+    city: z.string().max(80).optional(),
+    state: z.string().max(40).optional(),
+    postal_code: z.string().max(20).optional(),
+  })
+  .strict();
+
 export const PersonChartSchema = z
   .object({
     person: PersonDetailSchema,
@@ -130,6 +146,12 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("data:patient"),
     workspaceId: z.string().uuid(),
     personId: z.string().uuid(),
+  }).strict(),
+  z.object({
+    type: z.literal("data:updatePerson"),
+    workspaceId: z.string().uuid(),
+    personId: z.string().uuid(),
+    fields: DemographicUpdateSchema,
   }).strict(),
   z.object({ type: z.literal("workspace:set"), workspaceId: z.string().uuid() }).strict(),
 ]);
